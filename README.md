@@ -1,36 +1,125 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# BankVerse — Modern Banking Platform
+
+A full-stack banking application built with Next.js 15, TypeScript, Appwrite, Plaid, and Dwolla.
+
+## Features
+
+- **Authentication** — Secure sign-up/sign-in with Appwrite, session management, and middleware route protection
+- **Bank Account Linking** — Connect real bank accounts via Plaid Link
+- **Dashboard** — Financial overview with total balance, recent transactions, and spending analytics
+- **My Banks** — View and manage all connected bank accounts
+- **Transaction History** — Paginated, searchable transaction log with category badges
+- **Payment Transfer** — Multi-step ACH transfer form with Dwolla integration
+- **Profile & Settings** — Edit personal info, change password, danger zone
+- **Security** — Rate limiting, CSRF protection, input sanitization, audit logging
+- **CI/CD** — GitHub Actions pipeline (lint → type-check → test → build → docker)
+- **Production Ready** — Docker multi-stage builds, Vercel deployment, Sentry monitoring, SEO metadata
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Framework | Next.js 15 (App Router, Turbopack) |
+| Language | TypeScript 5 (strict mode) |
+| Styling | Tailwind CSS 3.4 + shadcn/ui (Radix UI) |
+| Forms | react-hook-form + zod |
+| Charts | Chart.js + react-chartjs-2 |
+| Backend/Auth | Appwrite (node-appwrite SDK) |
+| Banking | Plaid API + Dwolla API |
+| Monitoring | Sentry |
+| CI/CD | GitHub Actions |
+| Container | Docker (multi-stage) |
+| Hosting | Vercel |
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 20+
+- npm 10+
+- Appwrite instance (cloud or self-hosted)
+- Plaid developer account
+- Dwolla sandbox account
+
+### Environment Variables
+
+Copy `.env.local` and fill in your credentials:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# Appwrite
+NEXT_PUBLIC_APPWRITE_ENDPOINT=https://cloud.appwrite.io/v1
+NEXT_PUBLIC_APPWRITE_PROJECT_ID=your-project-id
+NEXT_PUBLIC_APPWRITE_DATABASE_ID=your-database-id
+APPWRITE_API_KEY=your-api-key
+
+# Plaid
+PLAID_CLIENT_ID=your-client-id
+PLAID_SECRET=your-secret
+PLAID_ENV=sandbox
+
+# Dwolla
+DWOLLA_KEY=your-key
+DWOLLA_SECRET=your-secret
+DWOLLA_ENV=sandbox
+
+# Sentry
+NEXT_PUBLIC_SENTRY_DSN=your-sentry-dsn
+
+# Site
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Install & Run
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm install
+npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Open [http://localhost:3000](http://localhost:3000).
 
-## Learn More
+### Docker
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+docker compose up --build
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Project Structure
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+├── app/
+│   ├── (auth)/           # Sign-in / Sign-up pages
+│   ├── (root)/           # Protected pages (dashboard, my-banks, etc.)
+│   ├── api/health/       # Health check endpoint
+│   ├── sitemap.ts        # Dynamic sitemap
+│   └── robots.ts         # Robots.txt config
+├── components/
+│   ├── ui/               # shadcn/ui primitives
+│   └── *.tsx             # Feature components
+├── lib/
+│   ├── actions/          # Server actions (user, plaid, dwolla)
+│   ├── appwrite/         # Appwrite config, auth, db
+│   ├── plaid/            # Plaid client config
+│   ├── dwolla/           # Dwolla client config
+│   ├── security/         # Rate limiting, CSRF, sanitization, audit
+│   └── utils.ts          # Utility functions
+├── constants/            # Sidebar links, categories, etc.
+├── types/                # TypeScript type definitions
+├── public/icons/         # SVG icons
+├── Dockerfile            # Multi-stage production build
+├── docker-compose.yml    # Docker Compose config
+└── .github/workflows/    # CI/CD pipelines
+```
 
-## Deploy on Vercel
+## Scripts
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start development server with Turbopack |
+| `npm run build` | Production build |
+| `npm run start` | Start production server |
+| `npm run lint` | Run ESLint |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## License
+
+MIT

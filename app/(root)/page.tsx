@@ -1,14 +1,30 @@
 import HeaderBox from "@/components/HeaderBox";
+import RecentTransactions from "@/components/RecentTransactions";
 import RightSidebar from "@/components/RightSidebar";
 import TotalBalanceBox from "@/components/TotalBalanceBox";
-import React from "react";
+import { getCurrentUser } from "@/lib/actions/user.actions";
+import { getAccounts } from "@/lib/actions/plaid.actions";
+import { redirect } from "next/navigation";
+import type { Metadata } from "next";
 
-const Home = () => {
-  const loggedIn = {
-    firstName: "aamira",
-    lastName: "bushra",
-    email: "aamirabushra@gmail.com",
-  };
+export const metadata: Metadata = {
+  title: "Dashboard",
+  description: "View your financial overview, recent transactions, and account balances.",
+};
+
+const Home = async () => {
+  const loggedIn = await getCurrentUser();
+
+  if (!loggedIn) {
+    redirect("/sign-in");
+  }
+
+  // Fetch accounts with balances
+  const accountsResult = await getAccounts();
+  const accounts = accountsResult.success ? accountsResult.accounts ?? [] : [];
+
+  const totalCurrentBalance = accounts.reduce((sum, a) => sum + a.currentBalance, 0);
+  const totalBanks = accounts.length;
 
   return (
     <section className="home">
@@ -22,17 +38,17 @@ const Home = () => {
           />
 
           <TotalBalanceBox
-            accounts={[]}
-            totalBanks={1}
-            totalCurrentBalance={1250.454}
+            accounts={accounts}
+            totalBanks={totalBanks}
+            totalCurrentBalance={totalCurrentBalance || 0}
           />
         </header>
-        Rect transactions
+        <RecentTransactions />
       </div>
       <RightSidebar
         user={loggedIn}
         transactions={[]}
-        banks={[{ currentBalance: 125.5 }, { currentBalance: 500 }]}
+        banks={accounts}
       />
     </section>
   );
