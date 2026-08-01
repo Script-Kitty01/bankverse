@@ -212,6 +212,9 @@ export async function getTransactionsByUserId(
       { id: "tx-010", $id: "tx-010", accountId: "demo-acc-001", name: "Apple Store", amount: -299.99, category: "Payment", date: "2026-07-21", paymentChannel: "online", type: "debit", pending: false, senderBankId: "demo-bank-001", receiverBankId: "" },
       { id: "tx-011", $id: "tx-011", accountId: "demo-acc-002", name: "Interest Payment", amount: 3.42, category: "Transfer", date: "2026-07-20", paymentChannel: "online", type: "credit", pending: false, senderBankId: "", receiverBankId: "demo-bank-002" },
       { id: "tx-012", $id: "tx-012", accountId: "demo-acc-001", name: "DoorDash Order", amount: -34.50, category: "Food and Drink", date: "2026-07-19", paymentChannel: "online", type: "debit", pending: false, senderBankId: "demo-bank-001", receiverBankId: "" },
+      { id: "tx-013", $id: "tx-013", accountId: "demo-acc-001", name: "UPI Transfer to Savings", amount: -2500, category: "Transfer", date: "2026-07-18", paymentChannel: "UPI", type: "debit", pending: false, senderBankId: "demo-bank-001", receiverBankId: "" },
+      { id: "tx-014", $id: "tx-014", accountId: "demo-acc-001", name: "Credit Card Bill", amount: -500, category: "Payment", date: "2026-07-17", paymentChannel: "Card", type: "debit", pending: false, senderBankId: "demo-bank-001", receiverBankId: "" },
+      { id: "tx-015", $id: "tx-015", accountId: "demo-acc-002", name: "Rent Payment via Netbanking", amount: -10000, category: "Payment", date: "2026-07-16", paymentChannel: "Netbanking", type: "debit", pending: false, senderBankId: "demo-bank-002", receiverBankId: "" },
     ];
 
     const filtered = mockTransactions.filter((tx) => accountIds.includes(tx.accountId));
@@ -239,4 +242,165 @@ export async function getTransactionsByUserId(
   );
 
   return result;
+}
+
+// ========================================
+// Razorpay Payment Records
+// ========================================
+
+const PAYMENTS_COLLECTION_ID =
+  process.env.NEXT_PUBLIC_APPWRITE_PAYMENTS_COLLECTION_ID || "payments";
+
+/**
+ * Create a payment record in the database.
+ * In demo mode, returns a mock payment record without calling Appwrite.
+ */
+export async function createPaymentRecord(params: {
+  userId: string;
+  razorpayOrderId: string;
+  razorpayPaymentId: string;
+  amount: number;
+  currency: string;
+  status: PaymentRecord["status"];
+  method: PaymentRecord["method"];
+  description: string;
+}): Promise<PaymentRecord> {
+  // Demo mode — return mock record
+  if (process.env.NEXT_PUBLIC_DEMO_MODE === "true") {
+    const mockPayment: PaymentRecord = {
+      id: `payment_${Date.now()}`,
+      $id: `payment_${Date.now()}`,
+      userId: params.userId,
+      razorpayOrderId: params.razorpayOrderId,
+      razorpayPaymentId: params.razorpayPaymentId,
+      amount: params.amount,
+      currency: params.currency,
+      status: params.status,
+      method: params.method,
+      description: params.description,
+      createdAt: new Date().toISOString(),
+    };
+    return mockPayment;
+  }
+
+  const { databases } = createServerClient();
+
+  const doc = await databases.createDocument(
+    DATABASE_ID,
+    PAYMENTS_COLLECTION_ID,
+    ID.unique(),
+    {
+      userId: params.userId,
+      razorpayOrderId: params.razorpayOrderId,
+      razorpayPaymentId: params.razorpayPaymentId,
+      amount: params.amount,
+      currency: params.currency,
+      status: params.status,
+      method: params.method,
+      description: params.description,
+      createdAt: new Date().toISOString(),
+    }
+  );
+
+  return {
+    id: doc.$id,
+    $id: doc.$id,
+    userId: doc.userId,
+    razorpayOrderId: doc.razorpayOrderId,
+    razorpayPaymentId: doc.razorpayPaymentId,
+    amount: doc.amount,
+    currency: doc.currency,
+    status: doc.status,
+    method: doc.method,
+    description: doc.description,
+    createdAt: doc.createdAt,
+  };
+}
+
+/**
+ * Get payment records for a user.
+ * In demo mode, returns mock payments.
+ */
+export async function getPaymentsByUserId(
+  userId: string,
+  limit = 20,
+  offset = 0
+): Promise<{ documents: PaymentRecord[]; total: number }> {
+  // Demo mode — return mock payments
+  if (process.env.NEXT_PUBLIC_DEMO_MODE === "true") {
+    const mockPayments: PaymentRecord[] = [
+      {
+        id: "pay_001",
+        $id: "pay_001",
+        userId,
+        razorpayOrderId: "order_demo_1738000000001",
+        razorpayPaymentId: "pay_demo_ABC123",
+        amount: 2500,
+        currency: "INR",
+        status: "paid",
+        method: "upi",
+        description: "UPI transfer to savings",
+        createdAt: "2025-01-27T14:30:00Z",
+      },
+      {
+        id: "pay_002",
+        $id: "pay_002",
+        userId,
+        razorpayOrderId: "order_demo_1738000000002",
+        razorpayPaymentId: "pay_demo_DEF456",
+        amount: 500,
+        currency: "INR",
+        status: "paid",
+        method: "card",
+        description: "Credit card bill payment",
+        createdAt: "2025-01-26T10:15:00Z",
+      },
+      {
+        id: "pay_003",
+        $id: "pay_003",
+        userId,
+        razorpayOrderId: "order_demo_1738000000003",
+        razorpayPaymentId: "pay_demo_GHI789",
+        amount: 10000,
+        currency: "INR",
+        status: "paid",
+        method: "netbanking",
+        description: "Rent payment",
+        createdAt: "2025-01-25T08:00:00Z",
+      },
+    ];
+
+    const paged = mockPayments.slice(offset, offset + limit);
+    return { documents: paged, total: mockPayments.length };
+  }
+
+  const { databases } = createServerClient();
+
+  const result = await databases.listDocuments(
+    DATABASE_ID,
+    PAYMENTS_COLLECTION_ID,
+    [
+      Query.equal("userId", userId),
+      Query.orderDesc("createdAt"),
+      Query.limit(limit),
+      Query.offset(offset),
+    ]
+  );
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const documents: PaymentRecord[] = result.documents.map((doc: any) => ({
+    id: doc.$id,
+    $id: doc.$id,
+    userId: doc.userId,
+    razorpayOrderId: doc.razorpayOrderId,
+    razorpayPaymentId: doc.razorpayPaymentId,
+    amount: doc.amount,
+    currency: doc.currency,
+    status: doc.status,
+    method: doc.method,
+    description: doc.description,
+    createdAt: doc.createdAt,
+  }));
+
+  return { documents, total: result.total };
 }

@@ -1,6 +1,16 @@
 import { formatAmount, formatDateTime } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { transactionCategoryStyles } from "@/constants";
+import { Smartphone, CreditCard, Building2, Wallet, Globe, Store } from "lucide-react";
+
+const channelBadgeStyles: Record<string, { bg: string; text: string; icon: React.ReactNode }> = {
+  UPI: { bg: "bg-purple-100", text: "text-purple-700", icon: <Smartphone size={12} /> },
+  Card: { bg: "bg-orange-100", text: "text-orange-700", icon: <CreditCard size={12} /> },
+  Netbanking: { bg: "bg-blue-100", text: "text-blue-700", icon: <Building2 size={12} /> },
+  Wallet: { bg: "bg-teal-100", text: "text-teal-700", icon: <Wallet size={12} /> },
+  online: { bg: "bg-gray-100", text: "text-gray-600", icon: <Globe size={12} /> },
+  "in store": { bg: "bg-yellow-100", text: "text-yellow-700", icon: <Store size={12} /> },
+};
 
 const TransactionsTable = ({
   transactions,
@@ -31,6 +41,7 @@ const TransactionsTable = ({
           {transactions.map((tx) => {
             const isDebit = tx.type === "debit" || tx.amount < 0;
             const categoryStyle = transactionCategoryStyles[tx.category as keyof typeof transactionCategoryStyles] || transactionCategoryStyles.default;
+            const channelStyle = channelBadgeStyles[tx.paymentChannel] || channelBadgeStyles.online;
 
             return (
               <tr
@@ -40,7 +51,16 @@ const TransactionsTable = ({
                 <td className="px-4 py-3">
                   <div className="flex flex-col">
                     <p className="text-14 font-semibold text-gray-900">{tx.name}</p>
-                    <p className="text-12 text-gray-500">{tx.paymentChannel}</p>
+                    <span
+                      className={cn(
+                        "mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-11 font-medium w-fit",
+                        channelStyle.bg,
+                        channelStyle.text
+                      )}
+                    >
+                      {channelStyle.icon}
+                      {tx.paymentChannel}
+                    </span>
                   </div>
                 </td>
                 <td className="px-4 py-3">

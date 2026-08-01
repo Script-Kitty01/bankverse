@@ -23,6 +23,7 @@
     "node-appwrite": "^27.1.0",
     "plaid": "^45.0.0",
     "query-string": "^9.1.1",
+    "razorpay": "^2.9.8",
     "react": "^19.0.0",
     "react-chartjs-2": "^5.3.0",
     "react-countup": "^6.5.3",

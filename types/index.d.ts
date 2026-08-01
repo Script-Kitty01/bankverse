@@ -118,9 +118,41 @@ declare type TransferParams = {
 
 declare type AddFundingSourceParams = {
   dwollaCustomerId: string;
-  processorToken: string;
-  bankName: string;
 };
+
+// ========================================
+// Razorpay Payment Types
+// ========================================
+
+declare type RazorpayOrderResponse = {
+  success: boolean;
+  orderId?: string;
+  amount?: number;
+  currency?: string;
+  error?: string;
+};
+
+declare type RazorpayVerifyResponse = {
+  success: boolean;
+  paymentId?: string;
+  error?: string;
+};
+
+declare type PaymentRecord = {
+  id: string;
+  $id: string;
+  userId: string;
+  razorpayOrderId: string;
+  razorpayPaymentId: string;
+  amount: number;
+  currency: string;
+  status: "created" | "paid" | "failed";
+  method: "upi" | "card" | "netbanking" | "wallet" | "other";
+  description: string;
+  createdAt: string;
+};
+
+declare type PaymentChannel = "UPI" | "Card" | "Netbanking" | "Wallet" | "ACH" | "online" | "in store";
 
 declare type NewDwollaCustomerParams = {
   firstName: string;
@@ -214,7 +246,7 @@ declare interface FooterProps {
 declare interface RightSidebarProps {
   user: User;
   transactions: Transaction[];
-  banks: (Bank & Account)[];
+  banks: Account[] | (Bank & Account)[];
 }
 
 declare interface SidebarProps {
