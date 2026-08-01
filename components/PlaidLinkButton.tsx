@@ -14,8 +14,11 @@ const PlaidLinkButton = () => {
   const router = useRouter();
   const [linkToken, setLinkToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const plaidEnabled = process.env.NEXT_PUBLIC_PLAID_ENABLED !== "false";
 
   useEffect(() => {
+    if (!plaidEnabled) return;
+
     const fetchLinkToken = async () => {
       setIsLoading(true);
       try {
@@ -31,7 +34,7 @@ const PlaidLinkButton = () => {
     };
 
     fetchLinkToken();
-  }, []);
+  }, [plaidEnabled]);
 
   const onSuccess = useCallback<PlaidLinkOnSuccess>(
     async (publicToken) => {
@@ -46,6 +49,9 @@ const PlaidLinkButton = () => {
     token: linkToken ?? "",
     onSuccess,
   });
+
+  // Hide button when Plaid is not available (e.g., in India)
+  if (!plaidEnabled) return null;
 
   return (
     <Button

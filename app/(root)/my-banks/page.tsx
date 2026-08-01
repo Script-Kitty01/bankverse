@@ -49,6 +49,9 @@ const MyBanks = async () => {
             <p className="text-16 text-gray-500">
               No bank accounts connected yet.
             </p>
+            <p className="text-14 text-gray-400">
+              Demo accounts are shown on the dashboard. Use Razorpay for UPI, card, and netbanking payments.
+            </p>
             <PlaidLinkButton />
           </div>
         )}

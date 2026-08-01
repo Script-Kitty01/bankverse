@@ -16,8 +16,14 @@ const PlaidLink = ({ user }: { user: { success: boolean } }) => {
   const [linkToken, setLinkToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const plaidEnabled = process.env.NEXT_PUBLIC_PLAID_ENABLED !== "false";
 
   useEffect(() => {
+    if (!plaidEnabled) {
+      setIsLoading(false);
+      return;
+    }
+
     const fetchLinkToken = async () => {
       try {
         const result = await createLinkToken();
@@ -34,7 +40,7 @@ const PlaidLink = ({ user }: { user: { success: boolean } }) => {
     };
 
     fetchLinkToken();
-  }, []);
+  }, [plaidEnabled]);
 
   const onSuccess = useCallback<PlaidLinkOnSuccess>(
     async (publicToken) => {
@@ -51,6 +57,20 @@ const PlaidLink = ({ user }: { user: { success: boolean } }) => {
     token: linkToken ?? "",
     onSuccess,
   });
+
+  // Show message when Plaid is not available (e.g., in India)
+  if (!plaidEnabled) {
+    return (
+      <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-center">
+        <p className="text-14 text-gray-500">
+          Bank account linking via Plaid is not available in your region.
+        </p>
+        <p className="text-12 text-gray-400">
+          You can still use Razorpay for UPI, card, and netbanking payments.
+        </p>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
