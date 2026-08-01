@@ -5,9 +5,19 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
-import { Form, FormControl, FormField, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { updateProfile, changePassword, signOut } from "@/lib/actions/user.actions";
+import {
+  updateProfile,
+  changePassword,
+  signOut,
+} from "@/lib/actions/user.actions";
 import { Loader2, LogOut, Save, Key } from "lucide-react";
 
 const profileSchema = z.object({
@@ -36,7 +46,10 @@ const ProfileForm = ({ user }: { user: User }) => {
   const [isSaving, setIsSaving] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [showPasswordForm, setShowPasswordForm] = useState(false);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [message, setMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
 
   const profileForm = useForm<z.infer<typeof profileSchema>>({
     resolver: zodResolver(profileSchema),
@@ -69,7 +82,10 @@ const ProfileForm = ({ user }: { user: User }) => {
     if (result.success) {
       setMessage({ type: "success", text: "Profile updated successfully!" });
     } else if ("error" in result) {
-      setMessage({ type: "error", text: result.error ?? "Failed to update profile." });
+      setMessage({
+        type: "error",
+        text: result.error ?? "Failed to update profile.",
+      });
     }
 
     setIsSaving(false);
@@ -85,7 +101,10 @@ const ProfileForm = ({ user }: { user: User }) => {
       passwordForm.reset();
       setShowPasswordForm(false);
     } else if ("error" in result) {
-      setMessage({ type: "error", text: result.error ?? "Failed to change password." });
+      setMessage({
+        type: "error",
+        text: result.error ?? "Failed to change password.",
+      });
     }
 
     setIsChangingPassword(false);
@@ -111,9 +130,14 @@ const ProfileForm = ({ user }: { user: User }) => {
 
       {/* Profile Form */}
       <div className="rounded-xl border border-gray-200 p-6">
-        <h2 className="text-20 font-semibold text-gray-900 mb-6">Personal Information</h2>
+        <h2 className="text-20 font-semibold text-gray-900 mb-6">
+          Personal Information
+        </h2>
         <Form {...profileForm}>
-          <form onSubmit={profileForm.handleSubmit(onSaveProfile)} className="space-y-6">
+          <form
+            onSubmit={profileForm.handleSubmit(onSaveProfile)}
+            className="space-y-6"
+          >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={profileForm.control}
@@ -150,7 +174,11 @@ const ProfileForm = ({ user }: { user: User }) => {
                 <div className="form-item">
                   <FormLabel className="form-label">Email</FormLabel>
                   <FormControl>
-                    <Input {...field} disabled className="input-class bg-gray-50" />
+                    <Input
+                      {...field}
+                      disabled
+                      className="input-class bg-gray-50"
+                    />
                   </FormControl>
                   <FormMessage className="mt-1 form-message" />
                 </div>
@@ -227,8 +255,16 @@ const ProfileForm = ({ user }: { user: User }) => {
               )}
             />
 
-            <Button type="submit" disabled={isSaving} className="bg-bankGradient">
-              {isSaving ? <Loader2 size={16} className="animate-spin mr-2" /> : <Save size={16} className="mr-2" />}
+            <Button
+              type="submit"
+              disabled={isSaving}
+              className="bg-bankGradient"
+            >
+              {isSaving ? (
+                <Loader2 size={16} className="animate-spin mr-2" />
+              ) : (
+                <Save size={16} className="mr-2" />
+              )}
               Save Changes
             </Button>
           </form>
@@ -250,15 +286,24 @@ const ProfileForm = ({ user }: { user: User }) => {
 
         {showPasswordForm && (
           <Form {...passwordForm}>
-            <form onSubmit={passwordForm.handleSubmit(onChangePassword)} className="space-y-4">
+            <form
+              onSubmit={passwordForm.handleSubmit(onChangePassword)}
+              className="space-y-4"
+            >
               <FormField
                 control={passwordForm.control}
                 name="currentPassword"
                 render={({ field }) => (
                   <div className="form-item">
-                    <FormLabel className="form-label">Current Password</FormLabel>
+                    <FormLabel className="form-label">
+                      Current Password
+                    </FormLabel>
                     <FormControl>
-                      <Input {...field} type="password" className="input-class" />
+                      <Input
+                        {...field}
+                        type="password"
+                        className="input-class"
+                      />
                     </FormControl>
                     <FormMessage className="mt-1 form-message" />
                   </div>
@@ -271,7 +316,11 @@ const ProfileForm = ({ user }: { user: User }) => {
                   <div className="form-item">
                     <FormLabel className="form-label">New Password</FormLabel>
                     <FormControl>
-                      <Input {...field} type="password" className="input-class" />
+                      <Input
+                        {...field}
+                        type="password"
+                        className="input-class"
+                      />
                     </FormControl>
                     <FormMessage className="mt-1 form-message" />
                   </div>
@@ -282,16 +331,28 @@ const ProfileForm = ({ user }: { user: User }) => {
                 name="confirmPassword"
                 render={({ field }) => (
                   <div className="form-item">
-                    <FormLabel className="form-label">Confirm New Password</FormLabel>
+                    <FormLabel className="form-label">
+                      Confirm New Password
+                    </FormLabel>
                     <FormControl>
-                      <Input {...field} type="password" className="input-class" />
+                      <Input
+                        {...field}
+                        type="password"
+                        className="input-class"
+                      />
                     </FormControl>
                     <FormMessage className="mt-1 form-message" />
                   </div>
                 )}
               />
-              <Button type="submit" disabled={isChangingPassword} className="bg-bankGradient">
-                {isChangingPassword ? <Loader2 size={16} className="animate-spin mr-2" /> : null}
+              <Button
+                type="submit"
+                disabled={isChangingPassword}
+                className="bg-bankGradient"
+              >
+                {isChangingPassword ? (
+                  <Loader2 size={16} className="animate-spin mr-2" />
+                ) : null}
                 Update Password
               </Button>
             </form>
@@ -303,9 +364,14 @@ const ProfileForm = ({ user }: { user: User }) => {
       <div className="rounded-xl border border-red-200 p-6">
         <h2 className="text-20 font-semibold text-red-600 mb-2">Danger Zone</h2>
         <p className="text-14 text-gray-600 mb-4">
-          Sign out of your account. You will need to sign in again to access your dashboard.
+          Sign out of your account. You will need to sign in again to access
+          your dashboard.
         </p>
-        <Button variant="outline" onClick={handleSignOut} className="border-red-300 text-red-600 hover:bg-red-50">
+        <Button
+          variant="outline"
+          onClick={handleSignOut}
+          className="border-red-300 text-red-600 hover:bg-red-50"
+        >
           <LogOut size={16} className="mr-2" />
           Sign Out
         </Button>

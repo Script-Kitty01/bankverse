@@ -2,8 +2,16 @@
 
 import { ID } from "node-appwrite";
 import { createServerClient } from "@/lib/appwrite/config";
-import { createSessionCookie, deleteSessionCookie, getLoggedInAccount } from "@/lib/appwrite/auth";
-import { createUserDocument, getUserByAccountId, updateUserDocument } from "@/lib/appwrite/db";
+import {
+  createSessionCookie,
+  deleteSessionCookie,
+  getLoggedInAccount,
+} from "@/lib/appwrite/auth";
+import {
+  createUserDocument,
+  getUserByAccountId,
+  updateUserDocument,
+} from "@/lib/appwrite/db";
 import { redirect } from "next/navigation";
 
 /**
@@ -13,12 +21,28 @@ import { redirect } from "next/navigation";
  * 3. Create session cookie
  */
 export const signUp = async (userData: SignUpParams) => {
-  const { email, password, firstName, lastName, address1, city, state, postalCode, dateOfBirth, ssn } = userData;
+  const {
+    email,
+    password,
+    firstName,
+    lastName,
+    address1,
+    city,
+    state,
+    postalCode,
+    dateOfBirth,
+    ssn,
+  } = userData;
 
   try {
     // 1. Create Appwrite account
     const { account } = createServerClient();
-    const newAccount = await account.create(ID.unique(), email, password, `${firstName} ${lastName}`);
+    const newAccount = await account.create(
+      ID.unique(),
+      email,
+      password,
+      `${firstName} ${lastName}`,
+    );
 
     // 2. Create user document in database
     await createUserDocument({
@@ -40,7 +64,10 @@ export const signUp = async (userData: SignUpParams) => {
     return { success: true } as const;
   } catch (error) {
     console.error("signUp error:", error);
-    return { success: false, error: "Failed to create account. Email may already be in use." };
+    return {
+      success: false,
+      error: "Failed to create account. Email may already be in use.",
+    };
   }
 };
 
@@ -49,7 +76,13 @@ export const signUp = async (userData: SignUpParams) => {
  * 1. Validate credentials via Appwrite
  * 2. Create session cookie
  */
-export const signIn = async ({ email, password }: { email: string; password: string }) => {
+export const signIn = async ({
+  email,
+  password,
+}: {
+  email: string;
+  password: string;
+}) => {
   try {
     // Create session (validates credentials)
     await createSessionCookie(email, password);
@@ -150,7 +183,10 @@ export const updateProfile = async (data: Partial<SignUpParams>) => {
 /**
  * Change password for the current user.
  */
-export const changePassword = async (currentPassword: string, newPassword: string) => {
+export const changePassword = async (
+  currentPassword: string,
+  newPassword: string,
+) => {
   try {
     const account = await getLoggedInAccount();
     if (!account) return { success: false, error: "Not authenticated." };
@@ -161,6 +197,9 @@ export const changePassword = async (currentPassword: string, newPassword: strin
     return { success: true };
   } catch (error) {
     console.error("changePassword error:", error);
-    return { success: false, error: "Failed to change password. Check your current password." };
+    return {
+      success: false,
+      error: "Failed to change password. Check your current password.",
+    };
   }
 };

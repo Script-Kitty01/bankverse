@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { usePlaidLink, PlaidLinkOnSuccess } from "react-plaid-link";
 import { Button } from "@/components/ui/button";
-import { createLinkToken, exchangePublicToken } from "@/lib/actions/plaid.actions";
+import {
+  createLinkToken,
+  exchangePublicToken,
+} from "@/lib/actions/plaid.actions";
 import { useRouter } from "next/navigation";
 import { Loader2, Plus } from "lucide-react";
 
@@ -36,7 +39,7 @@ const PlaidLinkButton = () => {
       await exchangePublicToken(publicToken);
       router.refresh();
     },
-    [router]
+    [router],
   );
 
   const { open, ready } = usePlaidLink({

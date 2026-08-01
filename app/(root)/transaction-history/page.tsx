@@ -9,7 +9,8 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Transaction History",
-  description: "View and search your complete transaction history across all accounts.",
+  description:
+    "View and search your complete transaction history across all accounts.",
 };
 
 interface Props {
@@ -27,7 +28,9 @@ const TransactionHistory = async ({ searchParams }: Props) => {
 
   // Get user's accounts
   const accountsResult = await getAccounts();
-  const accounts = accountsResult.success ? accountsResult.accounts ?? [] : [];
+  const accounts = accountsResult.success
+    ? (accountsResult.accounts ?? [])
+    : [];
   const accountIds = accounts.map((a) => a.id);
 
   // Get transactions

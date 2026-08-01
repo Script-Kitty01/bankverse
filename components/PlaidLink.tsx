@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { usePlaidLink, PlaidLinkOnSuccess } from "react-plaid-link";
 import { Button } from "@/components/ui/button";
-import { createLinkToken, exchangePublicToken } from "@/lib/actions/plaid.actions";
+import {
+  createLinkToken,
+  exchangePublicToken,
+} from "@/lib/actions/plaid.actions";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 
@@ -41,7 +44,7 @@ const PlaidLink = ({ user }: { user: { success: boolean } }) => {
         router.push("/");
       }
     },
-    [router]
+    [router],
   );
 
   const { open, ready } = usePlaidLink({
@@ -53,7 +56,9 @@ const PlaidLink = ({ user }: { user: { success: boolean } }) => {
     return (
       <div className="flex items-center justify-center gap-2 py-4">
         <Loader2 size={20} className="animate-spin" />
-        <span className="text-14 text-gray-600">Preparing bank connection...</span>
+        <span className="text-14 text-gray-600">
+          Preparing bank connection...
+        </span>
       </div>
     );
   }
@@ -69,7 +74,8 @@ const PlaidLink = ({ user }: { user: { success: boolean } }) => {
   return (
     <div className="flex flex-col gap-4">
       <p className="text-14 text-gray-600">
-        Connect your bank account to get started with BankVerse. We use Plaid to securely link your accounts.
+        Connect your bank account to get started with BankVerse. We use Plaid to
+        securely link your accounts.
       </p>
       <Button
         onClick={() => open()}

@@ -45,6 +45,9 @@ export function createSessionClient(session: string) {
 
 // Database & Collection IDs (set these in .env.local)
 export const DATABASE_ID = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!;
-export const USERS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_USERS_COLLECTION_ID!;
-export const BANKS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_BANKS_COLLECTION_ID!;
-export const TRANSACTIONS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_TRANSACTIONS_COLLECTION_ID!;
+export const USERS_COLLECTION_ID =
+  process.env.NEXT_PUBLIC_APPWRITE_USERS_COLLECTION_ID!;
+export const BANKS_COLLECTION_ID =
+  process.env.NEXT_PUBLIC_APPWRITE_BANKS_COLLECTION_ID!;
+export const TRANSACTIONS_COLLECTION_ID =
+  process.env.NEXT_PUBLIC_APPWRITE_TRANSACTIONS_COLLECTION_ID!;

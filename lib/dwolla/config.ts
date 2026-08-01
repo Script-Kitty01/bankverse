@@ -7,6 +7,7 @@ export function createDwollaClient() {
   return new Client({
     key: process.env.DWOLLA_KEY!,
     secret: process.env.DWOLLA_SECRET!,
-    environment: process.env.DWOLLA_ENV as "sandbox" | "production" || "sandbox",
+    environment:
+      (process.env.DWOLLA_ENV as "sandbox" | "production") || "sandbox",
   });
 }

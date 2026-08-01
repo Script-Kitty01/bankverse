@@ -16,7 +16,9 @@ const MyBanks = async () => {
   if (!loggedIn) redirect("/sign-in");
 
   const accountsResult = await getAccounts();
-  const accounts = accountsResult.success ? accountsResult.accounts ?? [] : [];
+  const accounts = accountsResult.success
+    ? (accountsResult.accounts ?? [])
+    : [];
 
   return (
     <section className="my-banks">
@@ -44,7 +46,9 @@ const MyBanks = async () => {
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center gap-4 rounded-lg border border-dashed border-gray-300 p-12">
-            <p className="text-16 text-gray-500">No bank accounts connected yet.</p>
+            <p className="text-16 text-gray-500">
+              No bank accounts connected yet.
+            </p>
             <PlaidLinkButton />
           </div>
         )}

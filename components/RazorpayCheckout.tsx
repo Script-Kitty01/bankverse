@@ -5,9 +5,20 @@ import Script from "next/script";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { createRazorpayOrder, verifyRazorpayPayment, recordRazorpayPayment } from "@/lib/actions/razorpay.actions";
+import {
+  createRazorpayOrder,
+  verifyRazorpayPayment,
+  recordRazorpayPayment,
+} from "@/lib/actions/razorpay.actions";
 import { formatAmount } from "@/lib/utils";
-import { Loader2, CheckCircle, Smartphone, CreditCard, Building2, Wallet } from "lucide-react";
+import {
+  Loader2,
+  CheckCircle,
+  Smartphone,
+  CreditCard,
+  Building2,
+  Wallet,
+} from "lucide-react";
 
 declare global {
   interface Window {
@@ -22,7 +33,11 @@ interface RazorpayCheckoutProps {
   onSuccess?: () => void;
 }
 
-const PAYMENT_METHODS: { id: PaymentMethod; label: string; icon: React.ReactNode }[] = [
+const PAYMENT_METHODS: {
+  id: PaymentMethod;
+  label: string;
+  icon: React.ReactNode;
+}[] = [
   { id: "upi", label: "UPI", icon: <Smartphone size={20} /> },
   { id: "card", label: "Card", icon: <CreditCard size={20} /> },
   { id: "netbanking", label: "Netbanking", icon: <Building2 size={20} /> },
@@ -67,7 +82,7 @@ const RazorpayCheckout = ({ onSuccess }: RazorpayCheckoutProps) => {
         const verifyResult = await verifyRazorpayPayment(
           orderResult.orderId,
           mockPaymentId,
-          mockSignature
+          mockSignature,
         );
 
         if (!verifyResult.success) {
@@ -83,7 +98,8 @@ const RazorpayCheckout = ({ onSuccess }: RazorpayCheckoutProps) => {
           amount: numAmount,
           currency: "INR",
           method: selectedMethod,
-          description: description || `Payment via ${selectedMethod.toUpperCase()}`,
+          description:
+            description || `Payment via ${selectedMethod.toUpperCase()}`,
         });
 
         if (!recordResult.success) {
@@ -104,16 +120,18 @@ const RazorpayCheckout = ({ onSuccess }: RazorpayCheckoutProps) => {
         amount: Math.round(numAmount * 100),
         currency: "INR",
         name: "BankVerse",
-        description: description || `Payment via ${selectedMethod.toUpperCase()}`,
+        description:
+          description || `Payment via ${selectedMethod.toUpperCase()}`,
         order_id: orderResult.orderId,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         handler: async (response: any) => {
-          const { razorpay_payment_id, razorpay_order_id, razorpay_signature } = response;
+          const { razorpay_payment_id, razorpay_order_id, razorpay_signature } =
+            response;
 
           const verifyResult = await verifyRazorpayPayment(
             razorpay_order_id,
             razorpay_payment_id,
-            razorpay_signature
+            razorpay_signature,
           );
 
           if (!verifyResult.success) {
@@ -128,7 +146,8 @@ const RazorpayCheckout = ({ onSuccess }: RazorpayCheckoutProps) => {
             amount: numAmount,
             currency: "INR",
             method: selectedMethod,
-            description: description || `Payment via ${selectedMethod.toUpperCase()}`,
+            description:
+              description || `Payment via ${selectedMethod.toUpperCase()}`,
           });
 
           if (!recordResult.success) {
@@ -158,7 +177,9 @@ const RazorpayCheckout = ({ onSuccess }: RazorpayCheckoutProps) => {
       const rzp = new window.Razorpay(options);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       rzp.on("payment.failed", (response: any) => {
-        setError(`Payment failed: ${response.error?.description || "Unknown error"}`);
+        setError(
+          `Payment failed: ${response.error?.description || "Unknown error"}`,
+        );
         setIsLoading(false);
       });
       rzp.open();
@@ -175,9 +196,12 @@ const RazorpayCheckout = ({ onSuccess }: RazorpayCheckoutProps) => {
           <CheckCircle size={32} className="text-green-600" />
         </div>
         <div className="text-center">
-          <h2 className="text-24 font-semibold text-gray-900">Payment Successful!</h2>
+          <h2 className="text-24 font-semibold text-gray-900">
+            Payment Successful!
+          </h2>
           <p className="text-16 text-gray-600 mt-2">
-            Your payment of {formatAmount(paidAmount)} via {selectedMethod.toUpperCase()} has been completed.
+            Your payment of {formatAmount(paidAmount)} via{" "}
+            {selectedMethod.toUpperCase()} has been completed.
           </p>
         </div>
         <Button onClick={onSuccess} className="bg-bankGradient">

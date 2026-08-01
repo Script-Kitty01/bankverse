@@ -21,7 +21,7 @@ function getRazorpayClient(): Razorpay {
  */
 export const createRazorpayOrder = async (
   amount: number,
-  currency = "INR"
+  currency = "INR",
 ): Promise<RazorpayOrderResponse> => {
   try {
     // Demo mode — return mock order
@@ -65,7 +65,7 @@ export const createRazorpayOrder = async (
 export const verifyRazorpayPayment = async (
   orderId: string,
   paymentId: string,
-  signature: string
+  signature: string,
 ): Promise<RazorpayVerifyResponse> => {
   try {
     // Demo mode — auto-verify
@@ -85,7 +85,10 @@ export const verifyRazorpayPayment = async (
       return { success: true, paymentId };
     }
 
-    return { success: false, error: "Payment verification failed — signature mismatch." };
+    return {
+      success: false,
+      error: "Payment verification failed — signature mismatch.",
+    };
   } catch (error) {
     console.error("verifyRazorpayPayment error:", error);
     return { success: false, error: "Payment verification failed." };

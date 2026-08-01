@@ -5,7 +5,10 @@ import { Configuration, PlaidApi, PlaidEnvironments } from "plaid";
  */
 export function createPlaidClient() {
   const configuration = new Configuration({
-    basePath: PlaidEnvironments[process.env.PLAID_ENV as keyof typeof PlaidEnvironments] || PlaidEnvironments.sandbox,
+    basePath:
+      PlaidEnvironments[
+        process.env.PLAID_ENV as keyof typeof PlaidEnvironments
+      ] || PlaidEnvironments.sandbox,
     baseOptions: {
       headers: {
         "PLAID-CLIENT-ID": process.env.PLAID_CLIENT_ID!,

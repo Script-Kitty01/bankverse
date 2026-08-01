@@ -7,7 +7,8 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Payment Transfer",
-  description: "Transfer funds between your accounts or send money to external bank accounts.",
+  description:
+    "Transfer funds between your accounts or send money to external bank accounts.",
 };
 
 const PaymentTransfer = async () => {
@@ -15,7 +16,9 @@ const PaymentTransfer = async () => {
   if (!loggedIn) redirect("/sign-in");
 
   const accountsResult = await getAccounts();
-  const accounts = accountsResult.success ? accountsResult.accounts ?? [] : [];
+  const accounts = accountsResult.success
+    ? (accountsResult.accounts ?? [])
+    : [];
 
   return (
     <section className="payment-transfer">

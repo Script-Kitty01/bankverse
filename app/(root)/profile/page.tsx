@@ -6,7 +6,8 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Profile",
-  description: "Manage your personal information, change your password, and update your settings.",
+  description:
+    "Manage your personal information, change your password, and update your settings.",
 };
 
 const Profile = async () => {

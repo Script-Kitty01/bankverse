@@ -46,7 +46,10 @@ export const createDwollaCustomer = async () => {
 /**
  * Create a funding source by linking a Plaid processor token.
  */
-export const createFundingSource = async (plaidProcessorToken: string, bankName: string) => {
+export const createFundingSource = async (
+  plaidProcessorToken: string,
+  bankName: string,
+) => {
   try {
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Not authenticated." };
@@ -57,10 +60,13 @@ export const createFundingSource = async (plaidProcessorToken: string, bankName:
 
     const dwollaClient = createDwollaClient();
 
-    const response = await dwollaClient.post(`${user.dwollaCustomerUrl}/funding-sources`, {
-      plaidToken: plaidProcessorToken,
-      name: bankName,
-    });
+    const response = await dwollaClient.post(
+      `${user.dwollaCustomerUrl}/funding-sources`,
+      {
+        plaidToken: plaidProcessorToken,
+        name: bankName,
+      },
+    );
 
     const location = response.headers.get("location") || "";
 

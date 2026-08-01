@@ -5,11 +5,17 @@ import TransactionsTable from "./TransactionsTable";
 
 const RecentTransactions = async () => {
   const accountsResult = await getAccounts();
-  const accounts = accountsResult.success ? accountsResult.accounts ?? [] : [];
+  const accounts = accountsResult.success
+    ? (accountsResult.accounts ?? [])
+    : [];
   // Use both appwriteItemId and id for matching mock data
   const accountIds = accounts.flatMap((a) => [a.appwriteItemId, a.id]);
 
-  const { documents: transactions } = await getTransactionsByUserId(accountIds, 5, 0);
+  const { documents: transactions } = await getTransactionsByUserId(
+    accountIds,
+    5,
+    0,
+  );
 
   return (
     <section className="recent-transactions">

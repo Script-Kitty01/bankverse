@@ -31,12 +31,20 @@ export async function middleware(request: NextRequest) {
   const isAuthenticated = !!sessionCookie?.value;
 
   // Redirect authenticated users away from auth pages
-  if (isAuthenticated && AUTH_ROUTES.some((route) => pathname.startsWith(route))) {
+  if (
+    isAuthenticated &&
+    AUTH_ROUTES.some((route) => pathname.startsWith(route))
+  ) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 
   // Redirect unauthenticated users to sign-in
-  if (!isAuthenticated && PROTECTED_ROUTES.some((route) => pathname === route || pathname.startsWith(route + "/"))) {
+  if (
+    !isAuthenticated &&
+    PROTECTED_ROUTES.some(
+      (route) => pathname === route || pathname.startsWith(route + "/"),
+    )
+  ) {
     const signInUrl = new URL("/sign-in", request.url);
     signInUrl.searchParams.set("redirect", pathname);
     return NextResponse.redirect(signInUrl);

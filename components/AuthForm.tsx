@@ -19,7 +19,9 @@ import PlaidLink from "./PlaidLink";
 
 const AuthForm = ({ type }: AuthFormProps) => {
   const router = useRouter();
-  const [user, setUser] = useState<{ success: boolean } | null | undefined>(null);
+  const [user, setUser] = useState<{ success: boolean } | null | undefined>(
+    null,
+  );
   const [isLoading, setisLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const formSchema = authformSchema(type);

@@ -13,7 +13,16 @@ import {
 } from "chart.js";
 import { Line } from "react-chartjs-2";
 
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Title, Tooltip, Legend);
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Filler,
+  Title,
+  Tooltip,
+  Legend,
+);
 
 interface NetWorthChartProps {
   data: { month: string; netWorth: number }[];
@@ -38,7 +47,9 @@ const NetWorthChart = ({ data }: NetWorthChartProps) => {
 
   return (
     <div className="w-full rounded-xl border border-gray-200 p-6">
-      <h3 className="text-18 font-semibold text-gray-900 mb-4">Net Worth Over Time</h3>
+      <h3 className="text-18 font-semibold text-gray-900 mb-4">
+        Net Worth Over Time
+      </h3>
       <Line
         data={chartData}
         options={{

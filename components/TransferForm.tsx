@@ -5,11 +5,23 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
-import { Form, FormControl, FormField, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { createTransfer } from "@/lib/actions/dwolla.actions";
 import { formatAmount } from "@/lib/utils";
-import { Loader2, ArrowRight, CheckCircle, Building2, Smartphone } from "lucide-react";
+import {
+  Loader2,
+  ArrowRight,
+  CheckCircle,
+  Building2,
+  Smartphone,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import RazorpayCheckout from "@/components/RazorpayCheckout";
 
@@ -18,10 +30,13 @@ const transferSchema = z.object({
   destinationType: z.enum(["own", "external"]),
   destinationAccountId: z.string().optional(),
   destinationEmail: z.string().email().optional(),
-  amount: z.string().min(1, "Enter an amount").refine(
-    (val) => !isNaN(Number(val)) && Number(val) > 0,
-    "Amount must be greater than 0"
-  ),
+  amount: z
+    .string()
+    .min(1, "Enter an amount")
+    .refine(
+      (val) => !isNaN(Number(val)) && Number(val) > 0,
+      "Amount must be greater than 0",
+    ),
   description: z.string().max(200).optional(),
 });
 
@@ -33,7 +48,9 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [step, setStep] = useState<"form" | "confirm" | "success">("form");
-  const [transferData, setTransferData] = useState<TransferFormData | null>(null);
+  const [transferData, setTransferData] = useState<TransferFormData | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodTab>("ach");
 
@@ -65,7 +82,10 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
     try {
       const result = await createTransfer({
         sourceFundingSourceUrl: transferData.sourceAccountId,
-        destinationFundingSourceUrl: transferData.destinationAccountId || transferData.destinationEmail || "",
+        destinationFundingSourceUrl:
+          transferData.destinationAccountId ||
+          transferData.destinationEmail ||
+          "",
         amount: Number(transferData.amount),
         description: transferData.description,
       });
@@ -91,9 +111,12 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
           <CheckCircle size={32} className="text-green-600" />
         </div>
         <div className="text-center">
-          <h2 className="text-24 font-semibold text-gray-900">Transfer Initiated!</h2>
+          <h2 className="text-24 font-semibold text-gray-900">
+            Transfer Initiated!
+          </h2>
           <p className="text-16 text-gray-600 mt-2">
-            Your transfer of {formatAmount(Number(transferData?.amount || 0))} has been initiated.
+            Your transfer of {formatAmount(Number(transferData?.amount || 0))}{" "}
+            has been initiated.
           </p>
         </div>
         <Button onClick={() => router.push("/")} className="bg-bankGradient">
@@ -104,20 +127,28 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
   }
 
   if (step === "confirm" && transferData) {
-    const sourceAcct = accounts.find((a) => a.id === transferData.sourceAccountId);
+    const sourceAcct = accounts.find(
+      (a) => a.id === transferData.sourceAccountId,
+    );
     return (
       <div className="flex flex-col gap-6">
-        <h2 className="text-20 font-semibold text-gray-900">Confirm Transfer</h2>
+        <h2 className="text-20 font-semibold text-gray-900">
+          Confirm Transfer
+        </h2>
         <div className="rounded-lg border border-gray-200 p-6 space-y-4">
           <div className="flex justify-between">
             <span className="text-14 text-gray-500">From</span>
-            <span className="text-14 font-semibold">{sourceAcct?.name} (...{sourceAcct?.mask})</span>
+            <span className="text-14 font-semibold">
+              {sourceAcct?.name} (...{sourceAcct?.mask})
+            </span>
           </div>
           <div className="flex justify-between">
             <span className="text-14 text-gray-500">To</span>
             <span className="text-14 font-semibold">
               {transferData.destinationType === "own"
-                ? accounts.find((a) => a.id === transferData.destinationAccountId)?.name || "Own Account"
+                ? accounts.find(
+                    (a) => a.id === transferData.destinationAccountId,
+                  )?.name || "Own Account"
                 : transferData.destinationEmail}
             </span>
           </div>
@@ -135,11 +166,23 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
           )}
         </div>
         <div className="flex gap-4">
-          <Button variant="outline" onClick={() => setStep("form")} className="flex-1">
+          <Button
+            variant="outline"
+            onClick={() => setStep("form")}
+            className="flex-1"
+          >
             Back
           </Button>
-          <Button onClick={handleConfirm} disabled={isLoading} className="flex-1 bg-bankGradient">
-            {isLoading ? <Loader2 size={16} className="animate-spin" /> : "Confirm Transfer"}
+          <Button
+            onClick={handleConfirm}
+            disabled={isLoading}
+            className="flex-1 bg-bankGradient"
+          >
+            {isLoading ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : (
+              "Confirm Transfer"
+            )}
           </Button>
         </div>
       </div>
@@ -201,7 +244,8 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
                       <option value="">Select account</option>
                       {accounts.map((account) => (
                         <option key={account.id} value={account.id}>
-                          {account.name} (...{account.mask}) — {formatAmount(account.currentBalance)}
+                          {account.name} (...{account.mask}) —{" "}
+                          {formatAmount(account.currentBalance)}
                         </option>
                       ))}
                     </select>
@@ -213,7 +257,8 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
 
             {selectedAccount && (
               <p className="text-14 text-gray-500">
-                Available balance: {formatAmount(selectedAccount.availableBalance)}
+                Available balance:{" "}
+                {formatAmount(selectedAccount.availableBalance)}
               </p>
             )}
 
@@ -288,7 +333,9 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
                 name="destinationEmail"
                 render={({ field }) => (
                   <div className="form-item">
-                    <FormLabel className="form-label">Recipient Email</FormLabel>
+                    <FormLabel className="form-label">
+                      Recipient Email
+                    </FormLabel>
                     <FormControl>
                       <Input
                         {...field}
@@ -351,9 +398,7 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
 
       {/* Razorpay / UPI Payment */}
       {paymentMethod === "razorpay" && (
-        <RazorpayCheckout
-          onSuccess={() => router.push("/")}
-        />
+        <RazorpayCheckout onSuccess={() => router.push("/")} />
       )}
     </div>
   );

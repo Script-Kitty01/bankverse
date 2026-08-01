@@ -152,7 +152,14 @@ declare type PaymentRecord = {
   createdAt: string;
 };
 
-declare type PaymentChannel = "UPI" | "Card" | "Netbanking" | "Wallet" | "ACH" | "online" | "in store";
+declare type PaymentChannel =
+  | "UPI"
+  | "Card"
+  | "Netbanking"
+  | "Wallet"
+  | "ACH"
+  | "online"
+  | "in store";
 
 declare type NewDwollaCustomerParams = {
   firstName: string;

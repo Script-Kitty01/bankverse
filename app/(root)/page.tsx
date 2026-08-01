@@ -9,7 +9,8 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Dashboard",
-  description: "View your financial overview, recent transactions, and account balances.",
+  description:
+    "View your financial overview, recent transactions, and account balances.",
 };
 
 const Home = async () => {
@@ -21,9 +22,14 @@ const Home = async () => {
 
   // Fetch accounts with balances
   const accountsResult = await getAccounts();
-  const accounts = accountsResult.success ? accountsResult.accounts ?? [] : [];
+  const accounts = accountsResult.success
+    ? (accountsResult.accounts ?? [])
+    : [];
 
-  const totalCurrentBalance = accounts.reduce((sum, a) => sum + a.currentBalance, 0);
+  const totalCurrentBalance = accounts.reduce(
+    (sum, a) => sum + a.currentBalance,
+    0,
+  );
   const totalBanks = accounts.length;
 
   return (
@@ -45,11 +51,7 @@ const Home = async () => {
         </header>
         <RecentTransactions />
       </div>
-      <RightSidebar
-        user={loggedIn}
-        transactions={[]}
-        banks={accounts}
-      />
+      <RightSidebar user={loggedIn} transactions={[]} banks={accounts} />
     </section>
   );
 };

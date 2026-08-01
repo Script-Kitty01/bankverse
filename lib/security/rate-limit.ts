@@ -11,14 +11,17 @@ interface RateLimitEntry {
 const store = new Map<string, RateLimitEntry>();
 
 // Clean up expired entries every 5 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of store) {
-    if (now > entry.resetAt) {
-      store.delete(key);
+setInterval(
+  () => {
+    const now = Date.now();
+    for (const [key, entry] of store) {
+      if (now > entry.resetAt) {
+        store.delete(key);
+      }
     }
-  }
-}, 5 * 60 * 1000);
+  },
+  5 * 60 * 1000,
+);
 
 /**
  * Check if a key has exceeded the rate limit.
@@ -30,14 +33,18 @@ setInterval(() => {
 export function checkRateLimit(
   key: string,
   maxAttempts: number,
-  windowMs: number
+  windowMs: number,
 ): { allowed: boolean; remaining: number; resetAt: number } {
   const now = Date.now();
   const entry = store.get(key);
 
   if (!entry || now > entry.resetAt) {
     store.set(key, { count: 1, resetAt: now + windowMs });
-    return { allowed: true, remaining: maxAttempts - 1, resetAt: now + windowMs };
+    return {
+      allowed: true,
+      remaining: maxAttempts - 1,
+      resetAt: now + windowMs,
+    };
   }
 
   entry.count++;
@@ -46,7 +53,11 @@ export function checkRateLimit(
     return { allowed: false, remaining: 0, resetAt: entry.resetAt };
   }
 
-  return { allowed: true, remaining: maxAttempts - entry.count, resetAt: entry.resetAt };
+  return {
+    allowed: true,
+    remaining: maxAttempts - entry.count,
+    resetAt: entry.resetAt,
+  };
 }
 
 /**

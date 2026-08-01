@@ -1,5 +1,11 @@
 import { ID, Query } from "node-appwrite";
-import { createServerClient, DATABASE_ID, USERS_COLLECTION_ID, BANKS_COLLECTION_ID, TRANSACTIONS_COLLECTION_ID } from "./config";
+import {
+  createServerClient,
+  DATABASE_ID,
+  USERS_COLLECTION_ID,
+  BANKS_COLLECTION_ID,
+  TRANSACTIONS_COLLECTION_ID,
+} from "./config";
 
 /**
  * Create a user document in the Appwrite database.
@@ -26,7 +32,7 @@ export async function createUserDocument(user: {
       ...user,
       dwollaCustomerUrl: "",
       dwollaCustomerId: "",
-    }
+    },
   );
 
   return doc;
@@ -38,10 +44,11 @@ export async function createUserDocument(user: {
 export async function getUserByAccountId(userId: string) {
   const { databases } = createServerClient();
 
-  const result = await databases.listDocuments(DATABASE_ID, USERS_COLLECTION_ID, [
-    Query.equal("userId", userId),
-    Query.limit(1),
-  ]);
+  const result = await databases.listDocuments(
+    DATABASE_ID,
+    USERS_COLLECTION_ID,
+    [Query.equal("userId", userId), Query.limit(1)],
+  );
 
   return result.documents[0] ?? null;
 }
@@ -52,10 +59,11 @@ export async function getUserByAccountId(userId: string) {
 export async function getUserByEmail(email: string) {
   const { databases } = createServerClient();
 
-  const result = await databases.listDocuments(DATABASE_ID, USERS_COLLECTION_ID, [
-    Query.equal("email", email),
-    Query.limit(1),
-  ]);
+  const result = await databases.listDocuments(
+    DATABASE_ID,
+    USERS_COLLECTION_ID,
+    [Query.equal("email", email), Query.limit(1)],
+  );
 
   return result.documents[0] ?? null;
 }
@@ -63,10 +71,18 @@ export async function getUserByEmail(email: string) {
 /**
  * Update a user document.
  */
-export async function updateUserDocument(documentId: string, data: Record<string, unknown>) {
+export async function updateUserDocument(
+  documentId: string,
+  data: Record<string, unknown>,
+) {
   const { databases } = createServerClient();
 
-  return await databases.updateDocument(DATABASE_ID, USERS_COLLECTION_ID, documentId, data);
+  return await databases.updateDocument(
+    DATABASE_ID,
+    USERS_COLLECTION_ID,
+    documentId,
+    data,
+  );
 }
 
 /**
@@ -82,7 +98,12 @@ export async function createBankDocument(bank: {
 }) {
   const { databases } = createServerClient();
 
-  return await databases.createDocument(DATABASE_ID, BANKS_COLLECTION_ID, ID.unique(), bank);
+  return await databases.createDocument(
+    DATABASE_ID,
+    BANKS_COLLECTION_ID,
+    ID.unique(),
+    bank,
+  );
 }
 
 /**
@@ -115,9 +136,11 @@ export async function getBanksByUserId(userId: string) {
 
   const { databases } = createServerClient();
 
-  const result = await databases.listDocuments(DATABASE_ID, BANKS_COLLECTION_ID, [
-    Query.equal("userId", userId),
-  ]);
+  const result = await databases.listDocuments(
+    DATABASE_ID,
+    BANKS_COLLECTION_ID,
+    [Query.equal("userId", userId)],
+  );
 
   return result.documents;
 }
@@ -128,7 +151,11 @@ export async function getBanksByUserId(userId: string) {
 export async function getBankByDocumentId(documentId: string) {
   const { databases } = createServerClient();
 
-  return await databases.getDocument(DATABASE_ID, BANKS_COLLECTION_ID, documentId);
+  return await databases.getDocument(
+    DATABASE_ID,
+    BANKS_COLLECTION_ID,
+    documentId,
+  );
 }
 
 /**
@@ -137,7 +164,11 @@ export async function getBankByDocumentId(documentId: string) {
 export async function deleteBankDocument(documentId: string) {
   const { databases } = createServerClient();
 
-  return await databases.deleteDocument(DATABASE_ID, BANKS_COLLECTION_ID, documentId);
+  return await databases.deleteDocument(
+    DATABASE_ID,
+    BANKS_COLLECTION_ID,
+    documentId,
+  );
 }
 
 /**
@@ -161,7 +192,7 @@ export async function createTransactionDocument(transaction: {
     DATABASE_ID,
     TRANSACTIONS_COLLECTION_ID,
     ID.unique(),
-    transaction
+    transaction,
   );
 }
 
@@ -171,7 +202,7 @@ export async function createTransactionDocument(transaction: {
 export async function getTransactionsByAccountId(
   accountId: string,
   limit = 10,
-  offset = 0
+  offset = 0,
 ) {
   const { databases } = createServerClient();
 
@@ -183,7 +214,7 @@ export async function getTransactionsByAccountId(
       Query.orderDesc("$createdAt"),
       Query.limit(limit),
       Query.offset(offset),
-    ]
+    ],
   );
 
   return result;
@@ -195,29 +226,226 @@ export async function getTransactionsByAccountId(
 export async function getTransactionsByUserId(
   accountIds: string[],
   limit = 10,
-  offset = 0
+  offset = 0,
 ) {
   // Return mock transactions in demo mode
   if (process.env.NEXT_PUBLIC_DEMO_MODE === "true") {
     const mockTransactions = [
-      { id: "tx-001", $id: "tx-001", accountId: "demo-acc-001", name: "Starbucks Coffee", amount: -12.50, category: "Food and Drink", date: "2026-07-31", paymentChannel: "in store", type: "debit", pending: false, senderBankId: "demo-bank-001", receiverBankId: "" },
-      { id: "tx-002", $id: "tx-002", accountId: "demo-acc-001", name: "Amazon.com", amount: -89.99, category: "Payment", date: "2026-07-30", paymentChannel: "online", type: "debit", pending: false, senderBankId: "demo-bank-001", receiverBankId: "" },
-      { id: "tx-003", $id: "tx-003", accountId: "demo-acc-001", name: "Salary Deposit", amount: 4500.00, category: "Transfer", date: "2026-07-28", paymentChannel: "online", type: "credit", pending: false, senderBankId: "", receiverBankId: "demo-bank-001" },
-      { id: "tx-004", $id: "tx-004", accountId: "demo-acc-001", name: "Netflix Subscription", amount: -15.99, category: "Payment", date: "2026-07-27", paymentChannel: "online", type: "debit", pending: false, senderBankId: "demo-bank-001", receiverBankId: "" },
-      { id: "tx-005", $id: "tx-005", accountId: "demo-acc-001", name: "Uber Ride", amount: -24.30, category: "Payment", date: "2026-07-26", paymentChannel: "online", type: "debit", pending: false, senderBankId: "demo-bank-001", receiverBankId: "" },
-      { id: "tx-006", $id: "tx-006", accountId: "demo-acc-002", name: "Freelance Payment", amount: 1200.00, category: "Transfer", date: "2026-07-25", paymentChannel: "online", type: "credit", pending: false, senderBankId: "", receiverBankId: "demo-bank-002" },
-      { id: "tx-007", $id: "tx-007", accountId: "demo-acc-002", name: "Whole Foods", amount: -67.45, category: "Food and Drink", date: "2026-07-24", paymentChannel: "in store", type: "debit", pending: false, senderBankId: "demo-bank-002", receiverBankId: "" },
-      { id: "tx-008", $id: "tx-008", accountId: "demo-acc-001", name: "Spotify Premium", amount: -9.99, category: "Payment", date: "2026-07-23", paymentChannel: "online", type: "debit", pending: true, senderBankId: "demo-bank-001", receiverBankId: "" },
-      { id: "tx-009", $id: "tx-009", accountId: "demo-acc-002", name: "Gas Station", amount: -45.00, category: "Payment", date: "2026-07-22", paymentChannel: "in store", type: "debit", pending: false, senderBankId: "demo-bank-002", receiverBankId: "" },
-      { id: "tx-010", $id: "tx-010", accountId: "demo-acc-001", name: "Apple Store", amount: -299.99, category: "Payment", date: "2026-07-21", paymentChannel: "online", type: "debit", pending: false, senderBankId: "demo-bank-001", receiverBankId: "" },
-      { id: "tx-011", $id: "tx-011", accountId: "demo-acc-002", name: "Interest Payment", amount: 3.42, category: "Transfer", date: "2026-07-20", paymentChannel: "online", type: "credit", pending: false, senderBankId: "", receiverBankId: "demo-bank-002" },
-      { id: "tx-012", $id: "tx-012", accountId: "demo-acc-001", name: "DoorDash Order", amount: -34.50, category: "Food and Drink", date: "2026-07-19", paymentChannel: "online", type: "debit", pending: false, senderBankId: "demo-bank-001", receiverBankId: "" },
-      { id: "tx-013", $id: "tx-013", accountId: "demo-acc-001", name: "UPI Transfer to Savings", amount: -2500, category: "Transfer", date: "2026-07-18", paymentChannel: "UPI", type: "debit", pending: false, senderBankId: "demo-bank-001", receiverBankId: "" },
-      { id: "tx-014", $id: "tx-014", accountId: "demo-acc-001", name: "Credit Card Bill", amount: -500, category: "Payment", date: "2026-07-17", paymentChannel: "Card", type: "debit", pending: false, senderBankId: "demo-bank-001", receiverBankId: "" },
-      { id: "tx-015", $id: "tx-015", accountId: "demo-acc-002", name: "Rent Payment via Netbanking", amount: -10000, category: "Payment", date: "2026-07-16", paymentChannel: "Netbanking", type: "debit", pending: false, senderBankId: "demo-bank-002", receiverBankId: "" },
+      {
+        id: "tx-001",
+        $id: "tx-001",
+        accountId: "demo-acc-001",
+        name: "Starbucks Coffee",
+        amount: -12.5,
+        category: "Food and Drink",
+        date: "2026-07-31",
+        paymentChannel: "in store",
+        type: "debit",
+        pending: false,
+        senderBankId: "demo-bank-001",
+        receiverBankId: "",
+      },
+      {
+        id: "tx-002",
+        $id: "tx-002",
+        accountId: "demo-acc-001",
+        name: "Amazon.com",
+        amount: -89.99,
+        category: "Payment",
+        date: "2026-07-30",
+        paymentChannel: "online",
+        type: "debit",
+        pending: false,
+        senderBankId: "demo-bank-001",
+        receiverBankId: "",
+      },
+      {
+        id: "tx-003",
+        $id: "tx-003",
+        accountId: "demo-acc-001",
+        name: "Salary Deposit",
+        amount: 4500.0,
+        category: "Transfer",
+        date: "2026-07-28",
+        paymentChannel: "online",
+        type: "credit",
+        pending: false,
+        senderBankId: "",
+        receiverBankId: "demo-bank-001",
+      },
+      {
+        id: "tx-004",
+        $id: "tx-004",
+        accountId: "demo-acc-001",
+        name: "Netflix Subscription",
+        amount: -15.99,
+        category: "Payment",
+        date: "2026-07-27",
+        paymentChannel: "online",
+        type: "debit",
+        pending: false,
+        senderBankId: "demo-bank-001",
+        receiverBankId: "",
+      },
+      {
+        id: "tx-005",
+        $id: "tx-005",
+        accountId: "demo-acc-001",
+        name: "Uber Ride",
+        amount: -24.3,
+        category: "Payment",
+        date: "2026-07-26",
+        paymentChannel: "online",
+        type: "debit",
+        pending: false,
+        senderBankId: "demo-bank-001",
+        receiverBankId: "",
+      },
+      {
+        id: "tx-006",
+        $id: "tx-006",
+        accountId: "demo-acc-002",
+        name: "Freelance Payment",
+        amount: 1200.0,
+        category: "Transfer",
+        date: "2026-07-25",
+        paymentChannel: "online",
+        type: "credit",
+        pending: false,
+        senderBankId: "",
+        receiverBankId: "demo-bank-002",
+      },
+      {
+        id: "tx-007",
+        $id: "tx-007",
+        accountId: "demo-acc-002",
+        name: "Whole Foods",
+        amount: -67.45,
+        category: "Food and Drink",
+        date: "2026-07-24",
+        paymentChannel: "in store",
+        type: "debit",
+        pending: false,
+        senderBankId: "demo-bank-002",
+        receiverBankId: "",
+      },
+      {
+        id: "tx-008",
+        $id: "tx-008",
+        accountId: "demo-acc-001",
+        name: "Spotify Premium",
+        amount: -9.99,
+        category: "Payment",
+        date: "2026-07-23",
+        paymentChannel: "online",
+        type: "debit",
+        pending: true,
+        senderBankId: "demo-bank-001",
+        receiverBankId: "",
+      },
+      {
+        id: "tx-009",
+        $id: "tx-009",
+        accountId: "demo-acc-002",
+        name: "Gas Station",
+        amount: -45.0,
+        category: "Payment",
+        date: "2026-07-22",
+        paymentChannel: "in store",
+        type: "debit",
+        pending: false,
+        senderBankId: "demo-bank-002",
+        receiverBankId: "",
+      },
+      {
+        id: "tx-010",
+        $id: "tx-010",
+        accountId: "demo-acc-001",
+        name: "Apple Store",
+        amount: -299.99,
+        category: "Payment",
+        date: "2026-07-21",
+        paymentChannel: "online",
+        type: "debit",
+        pending: false,
+        senderBankId: "demo-bank-001",
+        receiverBankId: "",
+      },
+      {
+        id: "tx-011",
+        $id: "tx-011",
+        accountId: "demo-acc-002",
+        name: "Interest Payment",
+        amount: 3.42,
+        category: "Transfer",
+        date: "2026-07-20",
+        paymentChannel: "online",
+        type: "credit",
+        pending: false,
+        senderBankId: "",
+        receiverBankId: "demo-bank-002",
+      },
+      {
+        id: "tx-012",
+        $id: "tx-012",
+        accountId: "demo-acc-001",
+        name: "DoorDash Order",
+        amount: -34.5,
+        category: "Food and Drink",
+        date: "2026-07-19",
+        paymentChannel: "online",
+        type: "debit",
+        pending: false,
+        senderBankId: "demo-bank-001",
+        receiverBankId: "",
+      },
+      {
+        id: "tx-013",
+        $id: "tx-013",
+        accountId: "demo-acc-001",
+        name: "UPI Transfer to Savings",
+        amount: -2500,
+        category: "Transfer",
+        date: "2026-07-18",
+        paymentChannel: "UPI",
+        type: "debit",
+        pending: false,
+        senderBankId: "demo-bank-001",
+        receiverBankId: "",
+      },
+      {
+        id: "tx-014",
+        $id: "tx-014",
+        accountId: "demo-acc-001",
+        name: "Credit Card Bill",
+        amount: -500,
+        category: "Payment",
+        date: "2026-07-17",
+        paymentChannel: "Card",
+        type: "debit",
+        pending: false,
+        senderBankId: "demo-bank-001",
+        receiverBankId: "",
+      },
+      {
+        id: "tx-015",
+        $id: "tx-015",
+        accountId: "demo-acc-002",
+        name: "Rent Payment via Netbanking",
+        amount: -10000,
+        category: "Payment",
+        date: "2026-07-16",
+        paymentChannel: "Netbanking",
+        type: "debit",
+        pending: false,
+        senderBankId: "demo-bank-002",
+        receiverBankId: "",
+      },
     ];
 
-    const filtered = mockTransactions.filter((tx) => accountIds.includes(tx.accountId));
+    const filtered = mockTransactions.filter((tx) =>
+      accountIds.includes(tx.accountId),
+    );
     const total = filtered.length;
     const paged = filtered.slice(offset, offset + limit);
 
@@ -238,7 +466,7 @@ export async function getTransactionsByUserId(
       Query.orderDesc("$createdAt"),
       Query.limit(limit),
       Query.offset(offset),
-    ]
+    ],
   );
 
   return result;
@@ -299,7 +527,7 @@ export async function createPaymentRecord(params: {
       method: params.method,
       description: params.description,
       createdAt: new Date().toISOString(),
-    }
+    },
   );
 
   return {
@@ -324,7 +552,7 @@ export async function createPaymentRecord(params: {
 export async function getPaymentsByUserId(
   userId: string,
   limit = 20,
-  offset = 0
+  offset = 0,
 ): Promise<{ documents: PaymentRecord[]; total: number }> {
   // Demo mode — return mock payments
   if (process.env.NEXT_PUBLIC_DEMO_MODE === "true") {
@@ -384,7 +612,7 @@ export async function getPaymentsByUserId(
       Query.orderDesc("createdAt"),
       Query.limit(limit),
       Query.offset(offset),
-    ]
+    ],
   );
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

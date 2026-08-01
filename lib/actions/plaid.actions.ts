@@ -93,8 +93,8 @@ export const getAccounts = async () => {
         accounts: [
           {
             id: "demo-acc-001",
-            availableBalance: 4520.50,
-            currentBalance: 4820.50,
+            availableBalance: 4520.5,
+            currentBalance: 4820.5,
             officialName: "Chase Checking",
             mask: "1234",
             institutionId: "ins_1",

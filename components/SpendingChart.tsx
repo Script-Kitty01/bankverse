@@ -11,7 +11,14 @@ import {
 } from "chart.js";
 import { Bar } from "react-chartjs-2";
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+);
 
 interface SpendingChartProps {
   data: { category: string; amount: number }[];
@@ -24,7 +31,13 @@ const SpendingChart = ({ data }: SpendingChartProps) => {
       {
         label: "Spending",
         data: data.map((d) => d.amount),
-        backgroundColor: ["#0747b6", "#2265d8", "#2f91fa", "#5ba0fb", "#87bdfd"],
+        backgroundColor: [
+          "#0747b6",
+          "#2265d8",
+          "#2f91fa",
+          "#5ba0fb",
+          "#87bdfd",
+        ],
         borderRadius: 8,
       },
     ],
@@ -32,7 +45,9 @@ const SpendingChart = ({ data }: SpendingChartProps) => {
 
   return (
     <div className="w-full rounded-xl border border-gray-200 p-6">
-      <h3 className="text-18 font-semibold text-gray-900 mb-4">Spending by Category</h3>
+      <h3 className="text-18 font-semibold text-gray-900 mb-4">
+        Spending by Category
+      </h3>
       <Bar
         data={chartData}
         options={{

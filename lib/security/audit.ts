@@ -37,7 +37,9 @@ export function auditLog(log: AuditLog): void {
     // TODO: Send to Sentry, Datadog, or CloudWatch
     console.log(JSON.stringify(entry));
   } else {
-    console.log(`[AUDIT] ${entry.action} — ${entry.success ? "SUCCESS" : "FAILURE"} — User: ${entry.userId || "anonymous"}`);
+    console.log(
+      `[AUDIT] ${entry.action} — ${entry.success ? "SUCCESS" : "FAILURE"} — User: ${entry.userId || "anonymous"}`,
+    );
   }
 }
 
@@ -45,20 +47,36 @@ export function auditLog(log: AuditLog): void {
  * Log a successful sign-in.
  */
 export function logSignIn(userId: string, ip?: string): void {
-  auditLog({ timestamp: new Date().toISOString(), action: "sign_in", userId, ip, success: true });
+  auditLog({
+    timestamp: new Date().toISOString(),
+    action: "sign_in",
+    userId,
+    ip,
+    success: true,
+  });
 }
 
 /**
  * Log a failed sign-in attempt.
  */
 export function logFailedSignIn(email: string, ip?: string): void {
-  auditLog({ timestamp: new Date().toISOString(), action: "sign_in", details: { email }, ip, success: false });
+  auditLog({
+    timestamp: new Date().toISOString(),
+    action: "sign_in",
+    details: { email },
+    ip,
+    success: false,
+  });
 }
 
 /**
  * Log a transfer.
  */
-export function logTransfer(userId: string, amount: number, success: boolean): void {
+export function logTransfer(
+  userId: string,
+  amount: number,
+  success: boolean,
+): void {
   auditLog({
     timestamp: new Date().toISOString(),
     action: "transfer_initiated",

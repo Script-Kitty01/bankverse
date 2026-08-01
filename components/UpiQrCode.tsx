@@ -4,7 +4,11 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { createRazorpayOrder, verifyRazorpayPayment, recordRazorpayPayment } from "@/lib/actions/razorpay.actions";
+import {
+  createRazorpayOrder,
+  verifyRazorpayPayment,
+  recordRazorpayPayment,
+} from "@/lib/actions/razorpay.actions";
 import { formatAmount } from "@/lib/utils";
 import { QRCodeSVG } from "qrcode.react";
 import { Loader2, CheckCircle, Copy, Smartphone } from "lucide-react";
@@ -55,7 +59,7 @@ const UpiQrCode = ({ onSuccess }: UpiQrCodeProps) => {
       const verifyResult = await verifyRazorpayPayment(
         orderResult.orderId,
         mockPaymentId,
-        mockSignature
+        mockSignature,
       );
 
       if (!verifyResult.success) {
@@ -95,7 +99,9 @@ const UpiQrCode = ({ onSuccess }: UpiQrCodeProps) => {
           <CheckCircle size={32} className="text-green-600" />
         </div>
         <div className="text-center">
-          <h2 className="text-24 font-semibold text-gray-900">Payment Received!</h2>
+          <h2 className="text-24 font-semibold text-gray-900">
+            Payment Received!
+          </h2>
           <p className="text-16 text-gray-600 mt-2">
             Your UPI payment of {formatAmount(paidAmount)} has been confirmed.
           </p>
@@ -161,19 +167,22 @@ const UpiQrCode = ({ onSuccess }: UpiQrCodeProps) => {
         {/* UPI ID */}
         <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5">
           <Smartphone size={16} className="text-purple-600" />
-          <span className="text-14 font-mono font-medium text-gray-900">{UPI_ID}</span>
+          <span className="text-14 font-mono font-medium text-gray-900">
+            {UPI_ID}
+          </span>
           <button
             type="button"
             onClick={handleCopyUpiId}
             className="ml-2 rounded-md p-1 hover:bg-gray-100 transition-colors"
             title="Copy UPI ID"
           >
-            <Copy size={14} className={copied ? "text-green-600" : "text-gray-400"} />
+            <Copy
+              size={14}
+              className={copied ? "text-green-600" : "text-gray-400"}
+            />
           </button>
         </div>
-        {copied && (
-          <p className="text-12 text-green-600">UPI ID copied!</p>
-        )}
+        {copied && <p className="text-12 text-green-600">UPI ID copied!</p>}
       </div>
 
       {/* Simulate Payment Button */}
