@@ -22,6 +22,7 @@
     "next": "15.1.7",
     "node-appwrite": "^27.1.0",
     "plaid": "^45.0.0",
+    "qrcode.react": "^4.2.0",
     "query-string": "^9.1.1",
     "razorpay": "^2.9.8",
     "react": "^19.0.0",

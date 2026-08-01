@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createRazorpayOrder, verifyRazorpayPayment, recordRazorpayPayment } from "@/lib/actions/razorpay.actions";
 import { formatAmount } from "@/lib/utils";
-import { Loader2, CheckCircle, Copy, QrCode, Smartphone } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
+import { Loader2, CheckCircle, Copy, Smartphone } from "lucide-react";
 
 interface UpiQrCodeProps {
   onSuccess?: () => void;
@@ -140,11 +141,17 @@ const UpiQrCode = ({ onSuccess }: UpiQrCodeProps) => {
 
       {/* QR Code Display */}
       <div className="flex flex-col items-center gap-4 rounded-xl border border-gray-200 bg-gray-50 p-6">
-        <div className="flex h-40 w-40 items-center justify-center rounded-xl bg-white border-2 border-dashed border-gray-300">
-          <div className="flex flex-col items-center gap-1">
-            <QrCode size={80} className="text-gray-700" />
-            <span className="text-10 text-gray-400">Demo QR</span>
-          </div>
+        <div className="flex items-center justify-center rounded-xl bg-white p-4 border-2 border-gray-200">
+          <QRCodeSVG
+            value={
+              amount
+                ? `upi://pay?pa=${UPI_ID}&pn=BankVerse&am=${amount}&tn=${encodeURIComponent(description || "Payment")}&cu=INR`
+                : `upi://pay?pa=${UPI_ID}&pn=BankVerse&cu=INR`
+            }
+            size={160}
+            level="M"
+            includeMargin={true}
+          />
         </div>
 
         <p className="text-14 text-gray-500 text-center">
