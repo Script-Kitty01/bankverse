@@ -95,7 +95,7 @@ const TransactionsTable = ({
             return (
               <tr
                 key={tx.id}
-                className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
+                className="border-b border-white/20 hover:bg-white/40 transition-colors"
               >
                 <td className="px-4 py-3">
                   <div className="flex flex-col">

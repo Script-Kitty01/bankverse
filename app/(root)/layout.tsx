@@ -17,7 +17,7 @@ export default async function RootLayout({
   }
 
   return (
-    <main className="flex h-screen w-full font-inter">
+    <main className="flex h-screen w-full font-inter bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
       <Sidebar user={loggedIn} />
 
       <div className="flex size-full flex-col">

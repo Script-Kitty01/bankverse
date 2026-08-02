@@ -106,9 +106,9 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
 
   if (step === "success") {
     return (
-      <div className="flex flex-col items-center justify-center gap-6 py-12">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
-          <CheckCircle size={32} className="text-green-600" />
+      <div className="glass-card rounded-2xl p-12 flex flex-col items-center justify-center gap-6">
+        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-green-400 to-emerald-500 shadow-lg">
+          <CheckCircle size={36} className="text-white" />
         </div>
         <div className="text-center">
           <h2 className="text-24 font-semibold text-gray-900">
@@ -119,7 +119,10 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
             has been initiated.
           </p>
         </div>
-        <Button onClick={() => router.push("/")} className="bg-bankGradient">
+        <Button
+          onClick={() => router.push("/")}
+          className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md"
+        >
           Back to Dashboard
         </Button>
       </div>
@@ -135,7 +138,7 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
         <h2 className="text-20 font-semibold text-gray-900">
           Confirm Transfer
         </h2>
-        <div className="rounded-lg border border-gray-200 p-6 space-y-4">
+        <div className="glass-card rounded-2xl p-6 space-y-4">
           <div className="flex justify-between">
             <span className="text-14 text-gray-500">From</span>
             <span className="text-14 font-semibold">
@@ -176,7 +179,7 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
           <Button
             onClick={handleConfirm}
             disabled={isLoading}
-            className="flex-1 bg-bankGradient"
+            className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md"
           >
             {isLoading ? (
               <Loader2 size={16} className="animate-spin" />
@@ -192,7 +195,7 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
   return (
     <div className="flex flex-col gap-6">
       {/* Payment Method Tabs */}
-      <div className="flex rounded-lg border border-gray-200 p-1 bg-gray-50">
+      <div className="flex rounded-xl border border-white/20 p-1 bg-white/50 backdrop-blur-sm">
         <button
           type="button"
           onClick={() => setPaymentMethod("ach")}
@@ -389,7 +392,7 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
               )}
             />
 
-            <Button type="submit" className="form-btn bg-bankGradient w-full">
+            <Button type="submit" className="form-btn bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white w-full shadow-md">
               Continue <ArrowRight size={16} className="ml-2" />
             </Button>
           </form>

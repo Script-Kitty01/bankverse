@@ -129,7 +129,7 @@ const ProfileForm = ({ user }: { user: User }) => {
       )}
 
       {/* Profile Form */}
-      <div className="rounded-xl border border-gray-200 p-6">
+      <div className="glass-card rounded-2xl p-6">
         <h2 className="text-20 font-semibold text-gray-900 mb-6">
           Personal Information
         </h2>
@@ -258,7 +258,7 @@ const ProfileForm = ({ user }: { user: User }) => {
             <Button
               type="submit"
               disabled={isSaving}
-              className="bg-bankGradient"
+              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md"
             >
               {isSaving ? (
                 <Loader2 size={16} className="animate-spin mr-2" />
@@ -272,7 +272,7 @@ const ProfileForm = ({ user }: { user: User }) => {
       </div>
 
       {/* Password Change */}
-      <div className="rounded-xl border border-gray-200 p-6">
+      <div className="glass-card rounded-2xl p-6">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-20 font-semibold text-gray-900">Password</h2>
           <Button

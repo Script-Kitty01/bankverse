@@ -56,7 +56,7 @@ const TransactionPagination = ({ currentPage, totalPages }: Props) => {
             variant={currentPage === page ? "default" : "outline"}
             size="sm"
             onClick={() => goToPage(page as number)}
-            className={currentPage === page ? "bg-bankGradient" : ""}
+            className={currentPage === page ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white" : ""}
           >
             {page}
           </Button>

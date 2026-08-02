@@ -191,9 +191,9 @@ const RazorpayCheckout = ({ onSuccess }: RazorpayCheckoutProps) => {
 
   if (step === "success") {
     return (
-      <div className="flex flex-col items-center justify-center gap-6 py-12">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
-          <CheckCircle size={32} className="text-green-600" />
+      <div className="glass-card rounded-2xl p-12 flex flex-col items-center justify-center gap-6">
+        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-green-400 to-emerald-500 shadow-lg">
+          <CheckCircle size={36} className="text-white" />
         </div>
         <div className="text-center">
           <h2 className="text-24 font-semibold text-gray-900">
@@ -204,7 +204,10 @@ const RazorpayCheckout = ({ onSuccess }: RazorpayCheckoutProps) => {
             {selectedMethod.toUpperCase()} has been completed.
           </p>
         </div>
-        <Button onClick={onSuccess} className="bg-bankGradient">
+        <Button
+          onClick={onSuccess}
+          className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md"
+        >
           Done
         </Button>
       </div>
@@ -259,10 +262,10 @@ const RazorpayCheckout = ({ onSuccess }: RazorpayCheckoutProps) => {
                 key={method.id}
                 type="button"
                 onClick={() => setSelectedMethod(method.id)}
-                className={`flex items-center gap-3 rounded-lg border p-4 transition-all ${
+                className={`flex items-center gap-3 rounded-xl border p-4 transition-all ${
                   selectedMethod === method.id
-                    ? "border-bankGradient bg-blue-50 text-blue-700"
-                    : "border-gray-200 text-gray-600 hover:border-gray-300"
+                    ? "border-blue-400 bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 shadow-md"
+                    : "border-white/30 bg-white/50 text-gray-600 hover:border-blue-300 hover:bg-white/80"
                 }`}
               >
                 {method.icon}
@@ -276,7 +279,7 @@ const RazorpayCheckout = ({ onSuccess }: RazorpayCheckoutProps) => {
         <Button
           onClick={handlePayment}
           disabled={isLoading || !amount}
-          className="form-btn bg-bankGradient w-full"
+          className="form-btn bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white w-full shadow-md"
         >
           {isLoading ? (
             <>

@@ -10,15 +10,12 @@ import {
 import { useRouter } from "next/navigation";
 import { Loader2, Plus } from "lucide-react";
 
-const PlaidLinkButton = () => {
+const PlaidLinkButtonInner = () => {
   const router = useRouter();
   const [linkToken, setLinkToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const plaidEnabled = process.env.NEXT_PUBLIC_PLAID_ENABLED !== "false";
 
   useEffect(() => {
-    if (!plaidEnabled) return;
-
     const fetchLinkToken = async () => {
       setIsLoading(true);
       try {
@@ -34,7 +31,7 @@ const PlaidLinkButton = () => {
     };
 
     fetchLinkToken();
-  }, [plaidEnabled]);
+  }, []);
 
   const onSuccess = useCallback<PlaidLinkOnSuccess>(
     async (publicToken) => {
@@ -50,14 +47,11 @@ const PlaidLinkButton = () => {
     onSuccess,
   });
 
-  // Hide button when Plaid is not available (e.g., in India)
-  if (!plaidEnabled) return null;
-
   return (
     <Button
       onClick={() => open()}
       disabled={!ready || isLoading}
-      className="flex items-center gap-2 bg-bankGradient text-white"
+      className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md"
     >
       {isLoading ? (
         <Loader2 size={16} className="animate-spin" />
@@ -67,6 +61,14 @@ const PlaidLinkButton = () => {
       Connect New Bank
     </Button>
   );
+};
+
+const PlaidLinkButton = () => {
+  const plaidEnabled = process.env.NEXT_PUBLIC_PLAID_ENABLED !== "false";
+
+  if (!plaidEnabled) return null;
+
+  return <PlaidLinkButtonInner />;
 };
 
 export default PlaidLinkButton;

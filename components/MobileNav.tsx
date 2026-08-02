@@ -28,7 +28,7 @@ const MobileNav = ({ user }: MobileNavProps) => {
             className="cursor-pointer"
           />
         </SheetTrigger>
-        <SheetContent side="left" className="border-none bg-white">
+        <SheetContent side="left" className="border-none bg-white/95 backdrop-blur-xl">
           <Link
             href="/"
             className="cursor-pointer flex items-center gap-1 px-4"
@@ -37,10 +37,10 @@ const MobileNav = ({ user }: MobileNavProps) => {
               src="/icons/logo.svg"
               width={34}
               height={34}
-              alt="Horizon logo"
+              alt="BankVerse logo"
             />
             <h1 className="text-26 font-ibm-plex-serif font-bold text-black-1">
-              Horizon
+              BankVerse
             </h1>
           </Link>
           <div className="mobilenav-sheet">
@@ -57,7 +57,7 @@ const MobileNav = ({ user }: MobileNavProps) => {
                         href={item.route}
                         key={item.label}
                         className={cn("mobilenav-sheet_close w-full", {
-                          "bg-bank-gradient": isActive,
+                          "bg-gradient-to-r from-blue-600 to-indigo-600": isActive,
                         })}
                       >
                         <Image
@@ -80,7 +80,6 @@ const MobileNav = ({ user }: MobileNavProps) => {
                     </SheetClose>
                   );
                 })}
-                USER
               </nav>
             </SheetClose>
           </div>

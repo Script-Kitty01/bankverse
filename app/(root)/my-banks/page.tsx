@@ -45,12 +45,13 @@ const MyBanks = async () => {
             ))}
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center gap-4 rounded-lg border border-dashed border-gray-300 p-12">
+          <div className="glass-card rounded-2xl p-12 flex flex-col items-center justify-center gap-4">
             <p className="text-16 text-gray-500">
               No bank accounts connected yet.
             </p>
-            <p className="text-14 text-gray-400">
-              Demo accounts are shown on the dashboard. Use Razorpay for UPI, card, and netbanking payments.
+            <p className="text-14 text-gray-400 text-center max-w-md">
+              Demo accounts are shown on the dashboard. Use Razorpay for UPI,
+              card, and netbanking payments.
             </p>
             <PlaidLinkButton />
           </div>

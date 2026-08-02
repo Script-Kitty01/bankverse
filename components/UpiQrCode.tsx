@@ -94,9 +94,9 @@ const UpiQrCode = ({ onSuccess }: UpiQrCodeProps) => {
 
   if (step === "success") {
     return (
-      <div className="flex flex-col items-center justify-center gap-6 py-12">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
-          <CheckCircle size={32} className="text-green-600" />
+      <div className="glass-card rounded-2xl p-12 flex flex-col items-center justify-center gap-6">
+        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-green-400 to-emerald-500 shadow-lg">
+          <CheckCircle size={36} className="text-white" />
         </div>
         <div className="text-center">
           <h2 className="text-24 font-semibold text-gray-900">
@@ -106,7 +106,10 @@ const UpiQrCode = ({ onSuccess }: UpiQrCodeProps) => {
             Your UPI payment of {formatAmount(paidAmount)} has been confirmed.
           </p>
         </div>
-        <Button onClick={onSuccess} className="bg-bankGradient">
+        <Button
+          onClick={onSuccess}
+          className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md"
+        >
           Done
         </Button>
       </div>
@@ -146,8 +149,8 @@ const UpiQrCode = ({ onSuccess }: UpiQrCodeProps) => {
       </div>
 
       {/* QR Code Display */}
-      <div className="flex flex-col items-center gap-4 rounded-xl border border-gray-200 bg-gray-50 p-6">
-        <div className="flex items-center justify-center rounded-xl bg-white p-4 border-2 border-gray-200">
+      <div className="flex flex-col items-center gap-4 glass-card rounded-2xl p-6">
+        <div className="flex items-center justify-center rounded-xl bg-white p-4 border-2 border-white/30 shadow-inner">
           <QRCodeSVG
             value={
               amount
@@ -189,7 +192,7 @@ const UpiQrCode = ({ onSuccess }: UpiQrCodeProps) => {
       <Button
         onClick={handleSimulatePayment}
         disabled={isLoading || !amount}
-        className="form-btn bg-bankGradient w-full"
+        className="form-btn bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white w-full shadow-md"
       >
         {isLoading ? (
           <>
