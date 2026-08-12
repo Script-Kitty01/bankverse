@@ -96,10 +96,18 @@ export class IncidentCorrelator {
     newIncident: PaymentIncident,
     existingIncidents: PaymentIncident[],
   ): CorrelationResult {
+    // Use the primary mismatch type as the root-cause identifier.
+    // The primary type is the most severe one, not just mismatchTypes[0].
+    const primaryType = IncidentCorrelator.primaryMismatchType(
+      newIncident.mismatchTypes,
+    );
+
     const newKey = buildCorrelationKey({
       provider: newIncident.provider,
-      mismatchType: newIncident.mismatchTypes[0] || "UNKNOWN",
+      mismatchType: primaryType,
       detectedAt: newIncident.detectedAt,
+      paymentMethod: newIncident.paymentMethod,
+      bank: newIncident.bank,
     });
 
     // Find an existing active incident with the same correlation key
@@ -107,10 +115,15 @@ export class IncidentCorrelator {
       if (existing.status === "RESOLVED" || existing.status === "DISMISSED") {
         return false;
       }
+      const existingPrimary = IncidentCorrelator.primaryMismatchType(
+        existing.mismatchTypes,
+      );
       const existingKey = buildCorrelationKey({
         provider: existing.provider,
-        mismatchType: existing.mismatchTypes[0] || "UNKNOWN",
+        mismatchType: existingPrimary,
         detectedAt: existing.detectedAt,
+        paymentMethod: existing.paymentMethod,
+        bank: existing.bank,
       });
       return keysMatch(newKey, existingKey);
     });
@@ -123,6 +136,13 @@ export class IncidentCorrelator {
         ...newIncident.reconciliationItemIds,
       );
 
+      // Merge mismatch types (deduplicate)
+      for (const mt of newIncident.mismatchTypes) {
+        if (!match.mismatchTypes.includes(mt)) {
+          match.mismatchTypes.push(mt);
+        }
+      }
+
       // Escalate severity if the merged count is high
       match.severity = escalateSeverity(
         match.severity,
@@ -130,7 +150,14 @@ export class IncidentCorrelator {
       );
 
       // Update title to reflect merged scope
-      match.title = `${newIncident.mismatchTypes[0]?.replace(/_/g, " ") || "Issue"} on ${match.provider} — ${match.affectedTransactionCount} items`;
+      match.title = `${primaryType.replace(/_/g, " ")} on ${match.provider} — ${match.affectedTransactionCount} items`;
+
+      // Add timeline event for the merge
+      match.timeline.push({
+        timestamp: new Date().toISOString(),
+        event: "MERGED",
+        detail: `Merged ${newIncident.affectedTransactionCount} additional items. Total: ${match.affectedTransactionCount}`,
+      });
 
       return {
         incident: match,
@@ -145,6 +172,30 @@ export class IncidentCorrelator {
       wasMerged: false,
       mergedIntoId: null,
     };
+  }
+
+  /**
+   * Determine the primary (root-cause) mismatch type from a list.
+   * The most severe type takes priority as the correlation anchor.
+   */
+  private static primaryMismatchType(mismatchTypes: string[]): string {
+    if (mismatchTypes.length === 0) return "UNKNOWN";
+
+    // Severity-ordered: CRITICAL types first, then HIGH, then rest
+    const criticalTypes = [
+      "DEBIT_WITHOUT_CREDIT",
+      "AMOUNT_MISMATCH",
+      "MISSING_INTERNAL",
+    ];
+    const highTypes = ["MISSING_EXTERNAL", "DUPLICATE", "FAILURE_RATE_SPIKE"];
+
+    for (const ct of criticalTypes) {
+      if (mismatchTypes.includes(ct)) return ct;
+    }
+    for (const ht of highTypes) {
+      if (mismatchTypes.includes(ht)) return ht;
+    }
+    return mismatchTypes[0];
   }
 
   /**
@@ -180,10 +231,15 @@ export class IncidentCorrelator {
     allIncidents: PaymentIncident[],
     windowCount = 6, // Look back 6 windows (30 min)
   ): PaymentIncident[] {
+    const primaryType = IncidentCorrelator.primaryMismatchType(
+      incident.mismatchTypes,
+    );
     const baseKey = buildCorrelationKey({
       provider: incident.provider,
-      mismatchType: incident.mismatchTypes[0] || "UNKNOWN",
+      mismatchType: primaryType,
       detectedAt: incident.detectedAt,
+      paymentMethod: incident.paymentMethod,
+      bank: incident.bank,
     });
 
     const baseTime = new Date(baseKey.timeWindow).getTime();
@@ -191,10 +247,15 @@ export class IncidentCorrelator {
     return allIncidents.filter((other) => {
       if (other.id === incident.id) return false;
 
+      const otherPrimary = IncidentCorrelator.primaryMismatchType(
+        other.mismatchTypes,
+      );
       const otherKey = buildCorrelationKey({
         provider: other.provider,
-        mismatchType: other.mismatchTypes[0] || "UNKNOWN",
+        mismatchType: otherPrimary,
         detectedAt: other.detectedAt,
+        paymentMethod: other.paymentMethod,
+        bank: other.bank,
       });
 
       const otherTime = new Date(otherKey.timeWindow).getTime();
@@ -215,9 +276,18 @@ function escalateSeverity(
   current: IncidentSeverity,
   affectedCount: number,
 ): IncidentSeverity {
+  // Escalation thresholds (cumulative):
+  //   ≥100 → always CRITICAL
+  //   ≥50  → LOW→MEDIUM, MEDIUM→HIGH, HIGH→CRITICAL
+  //   ≥20  → LOW→MEDIUM
+  //   ≥10  → LOW→MEDIUM (smaller threshold for initial escalation)
   if (affectedCount >= 100) return "CRITICAL";
-  if (affectedCount >= 50 && current === "LOW") return "MEDIUM";
-  if (affectedCount >= 50 && current === "MEDIUM") return "HIGH";
+  if (affectedCount >= 50) {
+    if (current === "LOW") return "MEDIUM";
+    if (current === "MEDIUM") return "HIGH";
+    if (current === "HIGH") return "CRITICAL";
+  }
   if (affectedCount >= 20 && current === "LOW") return "MEDIUM";
+  if (affectedCount >= 10 && current === "LOW") return "MEDIUM";
   return current;
 }

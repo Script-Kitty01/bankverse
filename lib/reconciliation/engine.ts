@@ -79,7 +79,7 @@ export class ReconciliationEngine {
       // 4. Compute summary
       run.totalItems = items.length;
       run.matchedItems = items.filter(
-        (i) => i.matchStatus === "MATCHED",
+        (i) => i.matchStatus === "MATCHED_EXACT" || i.matchStatus === "MATCHED_FUZZY",
       ).length;
       run.mismatchedItems = items.filter(
         (i) => i.matchStatus === "MISMATCHED",
@@ -139,7 +139,17 @@ export class ReconciliationEngine {
     start: string;
     end: string;
   }): Promise<PaymentTransaction[]> {
-    const allTransactions = await getAllPaymentTransactions(1000);
+    // Fetch with a generous limit; reconciliation runs are typically
+    // scoped to a date range so the full set should be manageable.
+    const MAX_TRANSACTIONS = 10_000;
+    const allTransactions = await getAllPaymentTransactions(MAX_TRANSACTIONS);
+
+    if (allTransactions.length >= MAX_TRANSACTIONS) {
+      console.warn(
+        `[ReconciliationEngine] fetchInternalTransactions hit limit of ${MAX_TRANSACTIONS}. ` +
+          `Results may be incomplete. Consider paginating getAllPaymentTransactions.`,
+      );
+    }
 
     const start = new Date(dateRange.start).getTime();
     const end = new Date(dateRange.end).getTime();
@@ -174,7 +184,11 @@ export class ReconciliationEngine {
 
     // Production: fetch from provider API
     // This would call Razorpay's settlement API, bank statement API, etc.
-    return [];
+    throw new Error(
+      `[ReconciliationEngine] External record fetching is not implemented for provider "${this.provider}". ` +
+        `Reconciliation cannot proceed without external data. ` +
+        `Implement fetchExternalRecords for this provider or run in demo mode.`,
+    );
   }
 }
 
@@ -189,6 +203,16 @@ export function getReconciliationEngine(
     engineInstance = new ReconciliationEngine(
       config || { provider: "razorpay" },
     );
+  } else if (config) {
+    console.warn(
+      "[ReconciliationEngine] Config provided but singleton already exists. " +
+        "Config is ignored. Call resetReconciliationEngine() first if you need to change config.",
+    );
   }
   return engineInstance;
+}
+
+/** Reset singleton (useful for testing with different configs). */
+export function resetReconciliationEngine(): void {
+  engineInstance = null;
 }

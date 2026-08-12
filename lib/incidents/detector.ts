@@ -20,19 +20,32 @@ export type IncidentStatus =
   | "RESOLVED"
   | "DISMISSED";
 
+export interface IncidentTimelineEvent {
+  timestamp: string;
+  event: "DETECTED" | "ESCALATED" | "MERGED" | "INVESTIGATING" | "ACTION_REQUIRED" | "RESOLVED" | "DISMISSED";
+  detail: string;
+}
+
 export interface PaymentIncident {
   id: string;
   title: string;
   severity: IncidentSeverity;
   status: IncidentStatus;
   provider: string;
+  /** Payment method(s) involved (upi, card, netbanking, ach) */
+  paymentMethod?: string;
+  /** Originating bank, if known */
+  bank?: string;
   affectedTransactionCount: number;
   totalAffectedAmount: number;
+  /** All mismatch types observed (not just the first) */
   mismatchTypes: string[];
   reconciliationItemIds: string[];
   detectedAt: string;
   resolvedAt: string | null;
   resolution: string | null;
+  /** Ordered timeline of events for this incident */
+  timeline: IncidentTimelineEvent[];
 }
 
 export interface OperationsSnapshot {
@@ -44,6 +57,16 @@ export interface OperationsSnapshot {
   totalVolume: number;
   activeIncidents: number;
   criticalIncidents: number;
+  /** Fraction of incidents auto-resolved (0-1) */
+  autoResolutionRate: number;
+  /** Fraction of incidents requiring manual intervention (0-1) */
+  manualInterventionRate: number;
+  /** Mean time to resolve in milliseconds */
+  mttrMs: number;
+  /** Total number of transactions affected by active incidents */
+  affectedTransactionVolume: number;
+  /** Total monetary value affected by active incidents */
+  affectedMoneyVolume: number;
   reconciliationStatus: {
     lastRunAt: string | null;
     matchRate: number;
@@ -55,7 +78,34 @@ export interface OperationsSnapshot {
 
 // ─── In-Memory Store ────────────────────────────────────────────
 
+const MAX_INCIDENTS = 500;
 const incidents: PaymentIncident[] = [];
+
+/** Prune oldest resolved/dismissed incidents when over limit. */
+function pruneIncidents(): void {
+  if (incidents.length <= MAX_INCIDENTS) return;
+
+  // Remove oldest resolved/dismissed first
+  const closed = incidents
+    .map((inc, idx) => ({ inc, idx }))
+    .filter(({ inc }) => inc.status === "RESOLVED" || inc.status === "DISMISSED")
+    .sort(
+      (a, b) =>
+        new Date(a.inc.detectedAt).getTime() -
+        new Date(b.inc.detectedAt).getTime(),
+    );
+
+  const toRemove = incidents.length - MAX_INCIDENTS;
+  for (let i = 0; i < Math.min(toRemove, closed.length); i++) {
+    const idx = incidents.indexOf(closed[i].inc);
+    if (idx !== -1) incidents.splice(idx, 1);
+  }
+
+  // If still over limit, remove oldest regardless of status
+  if (incidents.length > MAX_INCIDENTS) {
+    incidents.splice(0, incidents.length - MAX_INCIDENTS);
+  }
+}
 
 // ─── Detector ───────────────────────────────────────────────────
 
@@ -66,8 +116,15 @@ export class IncidentDetector {
    */
   static detectFromReconciliation(
     report: ReconciliationReport,
+    transactions?: PaymentTransaction[],
   ): PaymentIncident[] {
     const newIncidents: PaymentIncident[] = [];
+
+    // Build lookup for transaction method/bank
+    const txLookup = new Map<string, PaymentTransaction>();
+    if (transactions) {
+      for (const tx of transactions) txLookup.set(tx.id, tx);
+    }
 
     // Group mismatched items by mismatch type
     const mismatched = report.items.filter(
@@ -95,25 +152,39 @@ export class IncidentDetector {
         0,
       );
 
+      // Extract payment method and bank from the first matched transaction
+      const firstTx = txLookup.get(items[0]?.internalTransactionId || "");
+
+      const now = new Date().toISOString();
       const incident: PaymentIncident = {
         id: `inc_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
         title: `${mismatchType.replace(/_/g, " ")} — ${items.length} items`,
         severity,
         status: "DETECTED",
         provider: report.run.provider,
+        paymentMethod: firstTx?.method,
+        bank: firstTx?.bank,
         affectedTransactionCount: items.length,
         totalAffectedAmount: totalAmount,
         mismatchTypes: [mismatchType],
         reconciliationItemIds: items.map((i) => i.id),
-        detectedAt: new Date().toISOString(),
+        detectedAt: now,
         resolvedAt: null,
         resolution: null,
+        timeline: [
+          {
+            timestamp: now,
+            event: "DETECTED",
+            detail: `Detected ${items.length} ${mismatchType.replace(/_/g, " ")} items on ${report.run.provider}`,
+          },
+        ],
       };
 
       // Correlate: merge into existing incident if same provider+type+window
       const result = IncidentCorrelator.correlate(incident, incidents);
       if (!result.wasMerged) {
         incidents.push(incident);
+        pruneIncidents();
       }
       newIncidents.push(result.incident);
     }
@@ -149,25 +220,39 @@ export class IncidentDetector {
 
         const totalAmount = failed.reduce((sum, t) => sum + t.amount, 0);
 
+        // Extract payment method and bank from the first failed transaction
+        const firstFailed = failed[0];
+        const now = new Date().toISOString();
+
         const incident: PaymentIncident = {
           id: `inc_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
           title: `High failure rate on ${provider}: ${(failureRate * 100).toFixed(0)}% (${failed.length}/${txs.length})`,
           severity,
           status: "DETECTED",
           provider,
+          paymentMethod: firstFailed.method,
+          bank: firstFailed.bank,
           affectedTransactionCount: failed.length,
           totalAffectedAmount: totalAmount,
           mismatchTypes: ["FAILURE_RATE_SPIKE"],
           reconciliationItemIds: [],
-          detectedAt: new Date().toISOString(),
+          detectedAt: now,
           resolvedAt: null,
           resolution: null,
+          timeline: [
+            {
+              timestamp: now,
+              event: "DETECTED",
+              detail: `Detected ${(failureRate * 100).toFixed(0)}% failure rate on ${provider} (${failed.length}/${txs.length})`,
+            },
+          ],
         };
 
         // Correlate: merge into existing incident if same provider+type+window
         const result = IncidentCorrelator.correlate(incident, incidents);
         if (!result.wasMerged) {
           incidents.push(incident);
+          pruneIncidents();
         }
         newIncidents.push(result.incident);
       }
@@ -204,10 +289,35 @@ export class IncidentDetector {
     const incident = incidents.find((i) => i.id === incidentId);
     if (!incident) return null;
 
+    const now = new Date().toISOString();
     incident.status = status;
+
     if (status === "RESOLVED") {
-      incident.resolvedAt = new Date().toISOString();
+      incident.resolvedAt = now;
       incident.resolution = resolution || "Resolved";
+      incident.timeline.push({
+        timestamp: now,
+        event: "RESOLVED",
+        detail: resolution || "Resolved",
+      });
+    } else if (status === "DISMISSED") {
+      incident.timeline.push({
+        timestamp: now,
+        event: "DISMISSED",
+        detail: resolution || "Dismissed",
+      });
+    } else if (status === "INVESTIGATING") {
+      incident.timeline.push({
+        timestamp: now,
+        event: "INVESTIGATING",
+        detail: resolution || "Investigation started",
+      });
+    } else if (status === "ACTION_REQUIRED") {
+      incident.timeline.push({
+        timestamp: now,
+        event: "ACTION_REQUIRED",
+        detail: resolution || "Manual action required",
+      });
     }
 
     return incident;
@@ -233,6 +343,51 @@ export class IncidentDetector {
       (i) => i.severity === "CRITICAL",
     ).length;
 
+    // ─── Operational Metrics ──────────────────────────────────
+
+    // Auto-resolution rate: resolved incidents that were never escalated to ACTION_REQUIRED
+    const resolvedIncidents = incidents.filter(
+      (i) => i.status === "RESOLVED",
+    );
+    const autoResolved = resolvedIncidents.filter((i) => {
+      const hadManual = i.timeline.some(
+        (e) => e.event === "ACTION_REQUIRED",
+      );
+      return !hadManual;
+    });
+    const autoResolutionRate =
+      resolvedIncidents.length > 0
+        ? autoResolved.length / resolvedIncidents.length
+        : 0;
+    const manualInterventionRate =
+      resolvedIncidents.length > 0
+        ? 1 - autoResolutionRate
+        : 0;
+
+    // MTTR: mean time to resolve in milliseconds
+    const resolvedWithTimes = resolvedIncidents.filter(
+      (i) => i.resolvedAt && i.detectedAt,
+    );
+    const mttrMs =
+      resolvedWithTimes.length > 0
+        ? resolvedWithTimes.reduce((sum, i) => {
+            const duration =
+              new Date(i.resolvedAt!).getTime() -
+              new Date(i.detectedAt).getTime();
+            return sum + duration;
+          }, 0) / resolvedWithTimes.length
+        : 0;
+
+    // Affected transaction & money volume from active incidents
+    const affectedTransactionVolume = activeIncidents.reduce(
+      (sum, i) => sum + i.affectedTransactionCount,
+      0,
+    );
+    const affectedMoneyVolume = activeIncidents.reduce(
+      (sum, i) => sum + i.totalAffectedAmount,
+      0,
+    );
+
     return {
       timestamp: new Date().toISOString(),
       totalTransactions: transactions.length,
@@ -243,12 +398,17 @@ export class IncidentDetector {
       totalVolume,
       activeIncidents: activeIncidents.length,
       criticalIncidents,
+      autoResolutionRate,
+      manualInterventionRate,
+      mttrMs,
+      affectedTransactionVolume,
+      affectedMoneyVolume,
       reconciliationStatus: {
         lastRunAt: reconciliationReport?.run.completedAt || null,
         matchRate: reconciliationReport?.summary.matchRate || 0,
         pendingItems:
           reconciliationReport?.items.filter(
-            (i) => i.matchStatus !== "MATCHED",
+            (i) => i.matchStatus !== "MATCHED_EXACT" && i.matchStatus !== "MATCHED_FUZZY",
           ).length || 0,
       },
       providerHealth: providerHealth || {},

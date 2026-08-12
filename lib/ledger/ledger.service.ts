@@ -132,7 +132,24 @@ export async function reverseTransaction(
   const transaction = await getPaymentTransactionById(transactionId);
   if (!transaction) throw new Error(`Transaction ${transactionId} not found`);
 
-  const originalEntries = await getLedgerEntriesByTransaction(transactionId);
+  // Idempotency: check if reversal entries already exist
+  const allEntries = await getLedgerEntriesByTransaction(transactionId);
+  const existingReversal = allEntries.find((e) =>
+    e.description.startsWith("REVERSAL:"),
+  );
+  if (existingReversal) {
+    const reversalDebit = allEntries.find(
+      (e) => e.entryType === "DEBIT" && e.description.startsWith("REVERSAL:"),
+    )!;
+    const reversalCredit = allEntries.find(
+      (e) => e.entryType === "CREDIT" && e.description.startsWith("REVERSAL:"),
+    )!;
+    return { debitEntry: reversalDebit, creditEntry: reversalCredit };
+  }
+
+  const originalEntries = allEntries.filter(
+    (e) => !e.description.startsWith("REVERSAL:"),
+  );
   const { debit: originalDebit, credit: originalCredit } =
     validateReversalEntries(originalEntries, transactionId);
 
@@ -173,11 +190,31 @@ export async function getBalance(accountId: string): Promise<{
   const account = await getAccountById(accountId);
   if (!account) return zeroBalance();
 
-  return {
+  // Derive balance from entries (source of truth), not cached aggregates.
+  // The cached aggregates are a performance optimization; we cross-check
+  // them against the entry-derived balance and warn on drift.
+  const entries = await getLedgerEntriesByAccount(accountId, 10_000, 0);
+  const derived = computeBalance(entries);
+
+  const cached = {
     totalDebits: account.totalDebits,
     totalCredits: account.totalCredits,
     derivedBalance: account.derivedBalance,
   };
+
+  if (
+    derived.totalDebits !== cached.totalDebits ||
+    derived.totalCredits !== cached.totalCredits ||
+    derived.derivedBalance !== cached.derivedBalance
+  ) {
+    console.warn(
+      `[Ledger] Balance drift detected for account ${accountId}: ` +
+        `cached(debits=${cached.totalDebits}, credits=${cached.totalCredits}, balance=${cached.derivedBalance}) ` +
+        `vs derived(debits=${derived.totalDebits}, credits=${derived.totalCredits}, balance=${derived.derivedBalance})`,
+    );
+  }
+
+  return derived;
 }
 
 // ─── Get Transaction History ────────────────────────────────────

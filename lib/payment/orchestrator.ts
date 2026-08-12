@@ -300,7 +300,7 @@ export class PaymentOrchestrator {
       currentSettlement,
     );
 
-    // Process refund via provider
+    // Process refund via provider FIRST (money movement is source of truth)
     const refundResult = await this.provider.refundPayment({
       paymentId: transaction.providerReference,
       amount: request.amount,
@@ -319,8 +319,24 @@ export class PaymentOrchestrator {
       return { success: false, error: refundResult.error };
     }
 
-    // Reverse the ledger transaction
-    await reverseTransaction(transaction.id, request.reason);
+    // Reverse the ledger (idempotent — safe to retry if this fails)
+    try {
+      await reverseTransaction(transaction.id, request.reason);
+    } catch (ledgerError: any) {
+      // Provider refunded but ledger update failed — escalate for manual fix
+      await updatePaymentTransactionState(
+        transaction.id,
+        transaction.paymentState,
+        PaymentStateMachine.transitionSettlement(
+          currentSettlement,
+          "ESCALATED",
+        ),
+      );
+      return {
+        success: false,
+        error: `Provider refund succeeded but ledger reversal failed: ${ledgerError.message}`,
+      };
+    }
 
     // Transition to REFUNDED
     await updatePaymentTransactionState(
@@ -358,6 +374,16 @@ export function getPaymentOrchestrator(
 ): PaymentOrchestrator {
   if (!orchestratorInstance) {
     orchestratorInstance = new PaymentOrchestrator(config);
+  } else if (config) {
+    console.warn(
+      "[PaymentOrchestrator] Config provided but singleton already exists. " +
+        "Config is ignored. Call resetPaymentOrchestrator() first if you need to change config.",
+    );
   }
   return orchestratorInstance;
+}
+
+/** Reset singleton (useful for testing with different configs). */
+export function resetPaymentOrchestrator(): void {
+  orchestratorInstance = null;
 }

@@ -60,6 +60,10 @@ export interface PaymentTransaction {
   merchantId: string;
   amount: number;
   currency: string;
+  /** Payment method: upi, card, netbanking, ach, etc. */
+  method?: string;
+  /** Originating bank identifier, if known */
+  bank?: string;
   paymentState: PaymentState;
   settlementState: SettlementState;
   provider: string;

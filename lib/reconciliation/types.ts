@@ -8,7 +8,11 @@
 
 // ─── Match Status ───────────────────────────────────────────────
 
-export type MatchStatus = "MATCHED" | "MISMATCHED" | "UNMATCHED" | "PENDING";
+export type MatchStatus =
+  | "MATCHED_EXACT"
+  | "MATCHED_FUZZY"
+  | "MISMATCHED"
+  | "UNMATCHED";
 
 export type MismatchType =
   | "AMOUNT_MISMATCH"

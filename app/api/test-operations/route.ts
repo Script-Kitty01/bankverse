@@ -200,6 +200,8 @@ export async function GET() {
       severity: "HIGH",
       status: "DETECTED",
       provider: "razorpay",
+      paymentMethod: "upi",
+      bank: "hdfc",
       affectedTransactionCount: 5,
       totalAffectedAmount: 5000,
       mismatchTypes: ["AMOUNT_MISMATCH"],
@@ -207,6 +209,9 @@ export async function GET() {
       detectedAt: now,
       resolvedAt: null,
       resolution: null,
+      timeline: [
+        { timestamp: now, event: "DETECTED", detail: "Test detection" },
+      ],
     };
 
     // First incident stands alone

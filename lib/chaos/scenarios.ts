@@ -14,6 +14,11 @@ export interface ChaosScenarioDef {
   injectDescription: string;
   /** What the system should do in response */
   expectedBehavior: string;
+  /**
+   * Financial correctness invariant that must hold regardless of the failure.
+   * e.g. "SUM(debits) === SUM(credits) remains true"
+   */
+  invariant: string;
 }
 
 export const CHAOS_SCENARIOS: ChaosScenarioDef[] = [
@@ -27,6 +32,8 @@ export const CHAOS_SCENARIOS: ChaosScenarioDef[] = [
       "Mock PSP configured to return 504 Gateway Timeout after 30s delay.",
     expectedBehavior:
       "Orchestrator sets paymentState to UNKNOWN → settlementState to PENDING_RECONCILIATION → reconciliation detects orphan transaction.",
+    invariant:
+      "No money is double-counted: the transaction is either UNKNOWN (pending reconciliation) or FAILED (reversed), never SUCCESS without provider confirmation.",
   },
   {
     id: "amount-mismatch",
@@ -38,6 +45,8 @@ export const CHAOS_SCENARIOS: ChaosScenarioDef[] = [
       "External record amount differs from internal transaction amount by 10x.",
     expectedBehavior:
       "Reconciliation detects AMOUNT_MISMATCH → evidence shows internal.amount vs provider.amount → settlement enters PENDING_RECONCILIATION.",
+    invariant:
+      "SUM(debits) === SUM(credits) remains true. The mismatch is detected and quarantined, but the ledger itself stays balanced.",
   },
   {
     id: "duplicate-charge",
@@ -49,6 +58,8 @@ export const CHAOS_SCENARIOS: ChaosScenarioDef[] = [
       "Two external provider records exist for a single internal transaction.",
     expectedBehavior:
       "Reconciliation detects duplicate → one item MATCHED, one UNMATCHED (MISSING_INTERNAL) → settlement enters REFUND_PENDING for duplicate.",
+    invariant:
+      "The customer is never charged twice for the same transaction. Any duplicate external charge is flagged and refunded before settlement completes.",
   },
   {
     id: "missing-credit",
@@ -60,6 +71,8 @@ export const CHAOS_SCENARIOS: ChaosScenarioDef[] = [
       "Only a DEBIT entry exists in the ledger; the corresponding CREDIT entry is missing.",
     expectedBehavior:
       "Ledger integrity check fails → reconciliation detects DEBIT_WITHOUT_CREDIT → evidence shows ledger.debit > ledger.credit → settlement enters PENDING_RECONCILIATION.",
+    invariant:
+      "SUM(all ledger entries) === 0 at all times. A debit without a credit is detected and blocked from settlement — money is never created or destroyed.",
   },
   {
     id: "webhook-out-of-order",
@@ -71,6 +84,8 @@ export const CHAOS_SCENARIOS: ChaosScenarioDef[] = [
       "Send webhooks in reverse order: FAILED first, then SUCCESS.",
     expectedBehavior:
       "State machine rejects SUCCESS → PROCESSING transition (payment already FAILED) → payment stays FAILED → reconciliation confirms correct state.",
+    invariant:
+      "The state machine never accepts an invalid transition. The final state is always reachable through valid transitions only.",
   },
   {
     id: "provider-down",
@@ -82,6 +97,8 @@ export const CHAOS_SCENARIOS: ChaosScenarioDef[] = [
       "Mock PSP configured to reject all requests with connection error.",
     expectedBehavior:
       "Orchestrator sets paymentState to FAILED → settlementState to NOT_REQUIRED → no reconciliation needed → no money moved.",
+    invariant:
+      "No money moves when the provider is unreachable. All transactions are FAILED with settlement NOT_REQUIRED — the system is fail-closed.",
   },
   {
     id: "slow-reconciliation",
@@ -93,6 +110,8 @@ export const CHAOS_SCENARIOS: ChaosScenarioDef[] = [
       "Generate 1000 transactions, 50 with intentional amount mismatches.",
     expectedBehavior:
       "Reconciliation completes within reasonable time → all 50 mismatches have structured evidence → incident detection groups by provider.",
+    invariant:
+      "Every mismatch has structured evidence (internal + external records). No mismatch is silently dropped — 100% of mismatches are accounted for.",
   },
   {
     id: "refund-race-condition",
@@ -104,5 +123,7 @@ export const CHAOS_SCENARIOS: ChaosScenarioDef[] = [
       "Initiate refund immediately after payment creation, before provider responds.",
     expectedBehavior:
       "State machine queues refund until payment reaches terminal state → settlement transitions correctly to REFUNDED → RESOLVED.",
+    invariant:
+      "The refund is never lost: it either completes after the payment settles, or the payment fails and no refund is needed. The customer's balance is always correct.",
   },
 ];

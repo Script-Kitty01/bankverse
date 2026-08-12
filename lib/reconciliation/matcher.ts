@@ -51,7 +51,6 @@ export class ReconciliationMatcher {
     runId: string,
   ): { items: ReconciliationItem[]; evidence: ReconciliationEvidence[] } {
     const items: ReconciliationItem[] = [];
-    const evidence: ReconciliationEvidence[] = [];
     const matchedExternal = new Set<string>();
 
     for (const tx of internalTransactions) {
@@ -64,7 +63,6 @@ export class ReconciliationMatcher {
         matchedExternal.add(exactMatch.reference);
         const result = this.buildMatchResult(tx, exactMatch, "EXACT");
         items.push(this.buildItem(tx, exactMatch, runId, result));
-        evidence.push(this.buildEvidence(tx, exactMatch, result));
         continue;
       }
 
@@ -78,7 +76,6 @@ export class ReconciliationMatcher {
         matchedExternal.add(fuzzyMatch.reference);
         const result = this.buildMatchResult(tx, fuzzyMatch, "FUZZY");
         items.push(this.buildItem(tx, fuzzyMatch, runId, result));
-        evidence.push(this.buildEvidence(tx, fuzzyMatch, result));
         continue;
       }
 
@@ -90,7 +87,6 @@ export class ReconciliationMatcher {
         confidence: 0,
       };
       items.push(this.buildItem(tx, null, runId, unmatchedResult));
-      evidence.push(this.buildEvidence(tx, null, unmatchedResult));
     }
 
     // External records not matched to any internal transaction
@@ -103,9 +99,24 @@ export class ReconciliationMatcher {
           confidence: 0,
         };
         items.push(this.buildItem(null, ext, runId, unmatchedResult));
-        evidence.push(this.buildEvidence(null, ext, unmatchedResult));
       }
     }
+
+    // Build evidence from items (so itemId is properly set)
+    const evidence: ReconciliationEvidence[] = items.map((item) => {
+      const tx = internalTransactions.find(
+        (t) => t.id === item.internalTransactionId,
+      ) || null;
+      const ext = externalRecords.find(
+        (e) => e.reference === item.externalReference,
+      ) || null;
+      return this.buildEvidence(tx, ext, item.id, {
+        status: item.matchStatus,
+        mismatchType: item.mismatchType,
+        method: item.matchMethod,
+        confidence: 0, // confidence not stored on item, derive from match method
+      });
+    });
 
     return { items, evidence };
   }
@@ -118,6 +129,8 @@ export class ReconciliationMatcher {
     matchedExternal: Set<string>,
   ): ExternalRecord | null {
     const txTime = new Date(tx.createdAt).getTime();
+    let bestMatch: ExternalRecord | null = null;
+    let bestConfidence = 0;
 
     for (const ext of externalRecords) {
       if (matchedExternal.has(ext.reference)) continue;
@@ -138,12 +151,13 @@ export class ReconciliationMatcher {
           : 1;
       const confidence = (timeConfidence + amountConfidence) / 2;
 
-      if (confidence >= this.config.minConfidence) {
-        return ext;
+      if (confidence >= this.config.minConfidence && confidence > bestConfidence) {
+        bestMatch = ext;
+        bestConfidence = confidence;
       }
     }
 
-    return null;
+    return bestMatch;
   }
 
   private buildMatchResult(
@@ -166,7 +180,15 @@ export class ReconciliationMatcher {
     }
 
     // Check for mismatches
-    if (tx.amount !== ext.amount) {
+    // For EXACT matches (by reference), any amount difference is a mismatch.
+    // For FUZZY matches, respect the configured amountTolerance.
+    const amountDiff = Math.abs(tx.amount - ext.amount);
+    const isAmountMismatch =
+      method === "EXACT"
+        ? amountDiff !== 0
+        : amountDiff > this.config.amountTolerance;
+
+    if (isAmountMismatch) {
       return {
         status: "MISMATCHED",
         mismatchType: "AMOUNT_MISMATCH",
@@ -185,7 +207,7 @@ export class ReconciliationMatcher {
     }
 
     return {
-      status: "MATCHED",
+      status: method === "EXACT" ? "MATCHED_EXACT" : "MATCHED_FUZZY",
       method,
       confidence: method === "EXACT" ? 1 : 0.9,
     };
@@ -221,6 +243,7 @@ export class ReconciliationMatcher {
   private buildEvidence(
     tx: PaymentTransaction | null,
     ext: ExternalRecord | null,
+    itemId: string,
     result: {
       status: MatchStatus;
       mismatchType?: MismatchType;
@@ -229,7 +252,7 @@ export class ReconciliationMatcher {
     },
   ): ReconciliationEvidence {
     return {
-      itemId: "",
+      itemId,
       internalEntry: tx
         ? {
             transactionId: tx.id,
