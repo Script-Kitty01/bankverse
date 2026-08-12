@@ -8,6 +8,7 @@
 
 import type { ReconciliationItem, ReconciliationReport } from "@/lib/reconciliation/types";
 import type { PaymentTransaction } from "@/lib/ledger/types";
+import { IncidentCorrelator } from "./correlator";
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -109,8 +110,12 @@ export class IncidentDetector {
         resolution: null,
       };
 
-      incidents.push(incident);
-      newIncidents.push(incident);
+      // Correlate: merge into existing incident if same provider+type+window
+      const result = IncidentCorrelator.correlate(incident, incidents);
+      if (!result.wasMerged) {
+        incidents.push(incident);
+      }
+      newIncidents.push(result.incident);
     }
 
     return newIncidents;
@@ -159,8 +164,12 @@ export class IncidentDetector {
           resolution: null,
         };
 
-        incidents.push(incident);
-        newIncidents.push(incident);
+        // Correlate: merge into existing incident if same provider+type+window
+        const result = IncidentCorrelator.correlate(incident, incidents);
+        if (!result.wasMerged) {
+          incidents.push(incident);
+        }
+        newIncidents.push(result.incident);
       }
     }
 

@@ -12,7 +12,11 @@ type AuditAction =
   | "bank_link"
   | "bank_unlink"
   | "transfer_initiated"
-  | "transfer_completed";
+  | "transfer_completed"
+  | "WEBHOOK_PROCESSED"
+  | "WEBHOOK_UNKNOWN_TRANSACTION"
+  | "WEBHOOK_UNHANDLED_EVENT"
+  | "WEBHOOK_OUT_OF_ORDER";
 
 interface AuditLog {
   timestamp: string;
@@ -66,6 +70,23 @@ export function logFailedSignIn(email: string, ip?: string): void {
     details: { email },
     ip,
     success: false,
+  });
+}
+
+/**
+ * Log a generic audit event (used by webhooks, system events, etc.).
+ */
+export function logAuditEvent(
+  action: string,
+  userId?: string,
+  details?: Record<string, unknown>,
+): void {
+  auditLog({
+    timestamp: new Date().toISOString(),
+    action: action as AuditAction,
+    userId,
+    details,
+    success: true,
   });
 }
 

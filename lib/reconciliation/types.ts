@@ -17,6 +17,7 @@ export type MismatchType =
   | "DUPLICATE"
   | "TIMING_DIFFERENCE"
   | "CURRENCY_MISMATCH"
+  | "DEBIT_WITHOUT_CREDIT"
   | "UNKNOWN";
 
 export type MatchMethod = "EXACT" | "FUZZY" | "MANUAL";

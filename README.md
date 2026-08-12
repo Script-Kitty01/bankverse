@@ -1,8 +1,8 @@
-# 🏦 BankVerse — Modern Banking Platform
+﻿# 🛡️ BankVerse — Payment Reliability Platform
 
 <div align="center">
 
-![Next.js](https://img.shields.io/badge/Next.js-15-black?style=for-the-badge&logo=next.js&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js-16-black?style=for-the-badge&logo=next.js&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.4-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)
 ![React 19](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)
@@ -17,372 +17,113 @@
 
 <img src="public/icons/logo.svg" alt="BankVerse Logo" width="120" />
 
-# 🏦 BankVerse
+# 🛡️ BankVerse
 
-### *The Open-Source Banking Experience*
+### *BankVerse reduces the operational cost and customer impact of payment failures.*
 
-**Connect real bank accounts • Send ACH & UPI payments • Track spending with beautiful charts**
+**Double-entry ledger • Automated reconciliation • Chaos engineering • Incident management**
 
 [![GitHub stars](https://img.shields.io/github/stars/Script-Kitty01/bankverse?style=social)](https://github.com/Script-Kitty01/bankverse)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://makeapullrequest.com)
 
-[Features](#-features) • [Demo](#-live-demo) • [Architecture](#-architecture) • [Quick Start](#-quick-start) • [Payment Flows](#-payment-flows) • [Tech Stack](#-tech-stack)
+[Why BankVerse](#-why-bankverse) • [Reliability Architecture](#-reliability-architecture) • [Quick Start](#-quick-start) • [Features](#-features) • [Tech Stack](#-tech-stack)
 
 </div>
 
 ---
 
-## 📖 Overview
+## 💡 Why BankVerse
 
-BankVerse is a **production-ready, full-stack banking application** that brings the modern fintech experience to the open-source world. Connect real bank accounts via **Plaid**, view your financial dashboard with interactive charts, browse transaction history, and send money through **Dwolla ACH** or **Razorpay UPI** — all from a beautiful, responsive interface.
+Payment failures cost businesses **2-5% of revenue** in lost customers, manual reconciliation, and compliance penalties. Most banking apps treat failures as exceptions. BankVerse treats them as **expected events** and builds the infrastructure to detect, contain, and recover from them automatically.
 
-> 💡 **Demo Mode**: Set `NEXT_PUBLIC_DEMO_MODE=true` and explore the full app with mock data — no API keys needed!
+| Problem | BankVerse Solution |
+|---------|-------------------|
+| "Where did the money go?" | **Double-entry ledger** — every paisa is accounted for. SUM(debits) === SUM(credits) enforced at transaction time. |
+| "The provider says success but we show failure" | **Automated reconciliation** — internal ledger vs provider records, with structured mismatch evidence. |
+| "1,200 failed transactions, 1,200 alerts" | **Incident correlation** — groups related failures by provider, type, and time window into single actionable incidents. |
+| "How do we know the system actually handles failures?" | **Chaos engineering** — 8 failure scenarios (timeout, mismatch, duplicate, missing credit, webhook disorder, provider down, bulk mismatch, race condition) run on demand. |
+| "How do we prove to auditors?" | **Append-only ledger** — entries are never modified or deleted. Reversals create new entries. Full audit trail. |
+
+---
+
+## 🏗️ Reliability Architecture
 
 ```mermaid
 graph TB
-    subgraph Client["🖥️ Client Browser"]
-        UI["Next.js 15<br/>React 19 + Tailwind CSS"]
+    subgraph User["👤 Customer / Merchant"]
+        UI["BankVerse UI"]
     end
 
-    subgraph Auth["🔐 Authentication"]
-        MW["Middleware<br/>Route Protection"]
-        AW["Appwrite Auth<br/>Sessions + OAuth"]
+    subgraph Payment["💳 Payment Layer"]
+        ORCH["Payment Orchestrator<br/>Retry · Idempotency · State Machine"]
+        PSP["Payment Providers<br/>Razorpay · Dwolla · Plaid"]
     end
 
-    subgraph Banking["🏦 Banking APIs"]
-        PL["Plaid Link<br/>Account Linking"]
-        DW["Dwolla<br/>ACH Transfers"]
-        RZ["Razorpay<br/>UPI · Card · Netbanking"]
+    subgraph Ledger["📒 Double-Entry Ledger"]
+        VAL["Validation<br/>SUM(debits) === SUM(credits)"]
+        ENTRIES["Append-Only Entries<br/>Never modified, never deleted"]
+        BAL["Derived Balances<br/>Computed from entries"]
     end
 
-    subgraph Backend["⚙️ Backend Services"]
-        SA["Server Actions<br/>user · plaid · dwolla · razorpay"]
-        DB["Appwrite DB<br/>users · banks · transactions · payments"]
-        SEC["Security Layer<br/>Rate Limit · CSRF · Sanitize · Audit"]
+    subgraph Recon["🔍 Reconciliation"]
+        MATCHER["Reconciliation Matcher<br/>Internal vs External"]
+        ENGINE["Reconciliation Engine<br/>Scheduled + On-demand"]
     end
 
-    subgraph Ops["🚀 DevOps"]
-        CI["GitHub Actions<br/>Lint → Build → Docker"]
-        DO["Docker<br/>Multi-stage Build"]
-        SN["Sentry<br/>Error Monitoring"]
+    subgraph Incidents["🚨 Incident Management"]
+        DETECT["Incident Detector<br/>Recon mismatches + Failure spikes"]
+        CORR["Incident Correlator<br/>Group by provider · type · time window"]
+        DASH["Operations Dashboard<br/>KPIs · Provider Health · Active Incidents"]
     end
 
-    UI --> MW --> AW
-    UI --> SA
-    SA --> PL & DW & RZ
-    SA --> DB
-    SA --> SEC
-    CI --> DO
-    UI --> SN
+    subgraph Chaos["💥 Chaos Lab"]
+        SCENARIOS["8 Failure Scenarios<br/>INJECT → OBSERVE → VERIFY → PASS/FAIL"]
+    end
+
+    UI --> ORCH
+    ORCH --> PSP
+    ORCH --> VAL
+    VAL --> ENTRIES
+    ENTRIES --> BAL
+    ENTRIES --> MATCHER
+    PSP --> MATCHER
+    MATCHER --> ENGINE
+    ENGINE --> DETECT
+    DETECT --> CORR
+    CORR --> DASH
+    SCENARIOS --> ORCH
+    SCENARIOS --> MATCHER
 ```
 
----
+### The DEBIT_WITHOUT_CREDIT Lifecycle
 
-## ✨ Features
-
-### 🔐 Authentication & Security
-| Feature | Description |
-|---------|-------------|
-| Email/Password Auth | Secure sign-up & sign-in via Appwrite with session management |
-| Route Protection | Middleware-based redirects — unauthenticated users can't access dashboard |
-| Demo Mode | `NEXT_PUBLIC_DEMO_MODE=true` skips auth, uses mock data for development |
-| Rate Limiting | In-memory rate limiter on server actions (Redis-ready for production) |
-| CSRF Protection | Token-based CSRF prevention on all forms |
-| Input Sanitization | XSS prevention via HTML escaping |
-| Audit Logging | Track sign-ins, transfers, and profile changes |
-
-### 🏦 Banking & Payments
-| Feature | Description |
-|---------|-------------|
-| **Plaid Link** | Connect real bank accounts (Chase, BofA, Wells Fargo, etc.) via Plaid sandbox |
-| **Account Balances** | Real-time balance fetching with animated counters |
-| **ACH Transfers** | Send money between accounts via Dwolla ACH with multi-step confirmation |
-| **Razorpay UPI** | Pay via UPI apps (Google Pay, PhonePe, Paytm) with QR code or UPI ID |
-| **Razorpay Card** | Credit/debit card payments through Razorpay checkout |
-| **Razorpay Netbanking** | Direct bank transfers via Indian netbanking |
-| **Razorpay Wallet** | Wallet payments (Paytm, Mobikwik, etc.) |
-
-### 📊 Dashboard & Analytics
-| Feature | Description |
-|---------|-------------|
-| Total Balance | Sum across all linked accounts with count-up animation |
-| Spending by Category | Interactive doughnut chart with color-coded categories |
-| Net Worth Trend | Line chart showing balance changes over time |
-| Recent Transactions | Latest 10 transactions with channel badges and category tags |
-
-### 💳 Account Management
-| Feature | Description |
-|---------|-------------|
-| Bank Cards | Visual card display with masked account numbers and bank logos |
-| Connect / Disconnect | Add new banks or remove existing connections |
-| Multiple Accounts | Support for checking, savings, credit, and investment accounts |
-
-### 📋 Transaction History
-| Feature | Description |
-|---------|-------------|
-| Full History | Paginated, searchable transaction log across all accounts |
-| Channel Badges | Color-coded badges: 🟣 UPI, 🟠 Card, 🔵 Netbanking, ⚪ Online, 🟡 In Store |
-| Category Tags | Visual category chips (Food, Travel, Shopping, Transfer, etc.) |
-| Status Indicators | Pending / Completed status with animated badges |
-
-### 📱 User Experience
-| Feature | Description |
-|---------|-------------|
-| Responsive Design | Mobile sidebar + adaptive layouts for all screen sizes |
-| Loading States | Skeleton loaders on every page for smooth UX |
-| SEO Optimized | Dynamic sitemap, robots.txt, per-page metadata |
-| Dark Mode Ready | Tailwind-based theming infrastructure |
-
----
-
-## � Live Demo
-
-### 🏠 Dashboard
-```
-┌──────────────────────────────────────────────────────────┐
-│  🏦 BankVerse    🔍 Search...         👤 John Doe       │
-│──────────────────────────────────────────────────────────│
-│                                                          │
-│  Welcome, John                    ┌──────────────────┐  │
-│  Access & manage your accounts    │  Chase Bank      │  │
-│                                   │  ****4821        │  │
-│  ┌─────────────────────────┐      │  $4,820.50       │  │
-│  │ Total Balance           │      └──────────────────┘  │
-│  │ $17,621.25              │      ┌──────────────────┐  │
-│  │ 2 Bank Accounts         │      │  Wells Fargo     │  │
-│  └─────────────────────────┘      │  ****9075        │  │
-│                                   │  $12,800.75      │  │
-│  📊 Spending by Category          └──────────────────┘  │
-│  ┌─────────────────────┐                                 │
-│  │   🍕 Food   35%     │                                 │
-│  │   🛒 Shop   25%     │                                 │
-│  │   💸 Trans  20%     │                                 │
-│  │   ✈️ Travel 20%     │                                 │
-│  └─────────────────────┘                                 │
-│                                                          │
-│  📋 Recent Transactions                                  │
-│  ┌──────────────────────────────────────────────────┐   │
-│  │ Starbucks  🟡in store  -$12.50  ✓  Jul 31  🍕   │   │
-│  │ Amazon     ⚪online    -$89.99  ✓  Jul 30  🛒   │   │
-│  │ UPI Trans  🟣UPI       -$2,500  ✓  Jul 18  💸   │   │
-│  └──────────────────────────────────────────────────┘   │
-└──────────────────────────────────────────────────────────┘
-```
-
-### 💸 Payment Transfer — Dual Payment Methods
-
-```
-┌──────────────────────────────────────────────────────────┐
-│  💸 Payment Transfer                                     │
-│  ┌─────────────────────┬─────────────────────────────┐   │
-│  │ 🏦 Bank Transfer    │ 📱 Razorpay / UPI  ◀ active │   │
-│  └─────────────────────┴─────────────────────────────┘   │
-│                                                          │
-│  Amount (INR)                                            │
-│  ┌──────────────────────────────────────────────────┐   │
-│  │ 2,500                                            │   │
-│  └──────────────────────────────────────────────────┘   │
-│                                                          │
-│  Payment Method                                          │
-│  ┌──────────────┐ ┌──────────────┐                      │
-│  │ 📱 UPI  ✓   │ │ 💳 Card     │                      │
-│  └──────────────┘ └──────────────┘                      │
-│  ┌──────────────┐ ┌──────────────┐                      │
-│  │ 🏦 Netbank  │ │ 👛 Wallet   │                      │
-│  └──────────────┘ └──────────────┘                      │
-│                                                          │
-│  ┌──────────────────────────────────────────────────┐   │
-│  │         Pay ₹2,500 via UPI                       │   │
-│  └──────────────────────────────────────────────────┘   │
-└──────────────────────────────────────────────────────────┘
-```
-
-### 📱 UPI QR Code Payment
-
-```
-┌──────────────────────────────────────────────────────────┐
-│  💸 Payment Transfer                                     │
-│                                                          │
-│  Amount (INR): 2,500                                     │
-│                                                          │
-│  ┌──────────────────────────────────────────────────┐   │
-│  │                                                  │   │
-│  │              ████████████████████                │   │
-│  │              ██ ▄▄▄▄▄ ██▀▀█ ██                │   │
-│  │              ██ █   █ ██▀▀█ ██                │   │
-│  │              ██ ▀▀▀▀▀ ██  █ ██                │   │
-│  │              ██▀▀▀▀▀▀▀▀█ ▀▀██                │   │
-│  │              ████████████████████                │   │
-│  │                                                  │   │
-│  │     Scan with any UPI app to pay                 │   │
-│  │                                                  │   │
-│  │     ┌──────────────────────────┐                 │   │
-│  │     │ 📱 bankverse@upi    📋   │                 │   │
-│  │     └──────────────────────────┘                 │   │
-│  │                                                  │   │
-│  └──────────────────────────────────────────────────┘   │
-│                                                          │
-│  ┌──────────────────────────────────────────────────┐   │
-│  │         Simulate UPI Payment ₹2,500              │   │
-│  └──────────────────────────────────────────────────┘   │
-└──────────────────────────────────────────────────────────┘
-```
-
----
-
-## �🏗️ Architecture
-
-```mermaid
-flowchart LR
-    subgraph Routes["📄 App Router"]
-        direction TB
-        Auth["(auth)/<br/>sign-in · sign-up"]
-        Root["(root)/<br/>dashboard · my-banks<br/>transaction-history<br/>payment-transfer · profile"]
-        API["api/health"]
-    end
-
-    subgraph Components["🧩 Components"]
-        direction TB
-        Layout["Sidebar · MobileNav · HeaderBox"]
-        Cards["BankCard · TotalBalanceBox"]
-        Charts["DoughnutChart · AnimatedCounter"]
-        Forms["AuthForm · TransferForm<br/>RazorpayCheckout · UpiQrCode"]
-        Data["TransactionsTable · Pagination · RightSidebar"]
-    end
-
-    subgraph DataLayer["📦 Data Layer"]
-        direction TB
-        Actions["Server Actions<br/>user · plaid · dwolla · razorpay"]
-        SDK["Appwrite SDK<br/>auth · config · db"]
-        External["Plaid API · Dwolla API · Razorpay API"]
-    end
-
-    subgraph Security["🛡️ Security"]
-        direction TB
-        Rate["Rate Limiter"]
-        CSRF["CSRF Tokens"]
-        Sanitize["Input Sanitization"]
-        Audit["Audit Logger"]
-    end
-
-    Routes --> Components
-    Components --> DataLayer
-    DataLayer --> Security
-```
-
-### Data Flow: Connecting a Bank Account
+The most dangerous payment failure: customer is debited but merchant is never credited. Here's how BankVerse handles it end-to-end:
 
 ```mermaid
 sequenceDiagram
-    actor User
-    participant UI as BankVerse UI
-    participant SA as Server Actions
-    participant Plaid as Plaid API
-    participant Dwolla as Dwolla API
-    participant DB as Appwrite DB
+    actor C as Customer
+    participant P as Payment Orchestrator
+    participant L as Double-Entry Ledger
+    participant R as Reconciliation Engine
+    participant I as Incident Detector
+    participant O as Operations Dashboard
 
-    User->>UI: Click "Connect Bank"
-    UI->>SA: createLinkToken(userId)
-    SA->>Plaid: POST /link/token/create
-    Plaid-->>SA: link_token
-    SA-->>UI: Link token
-    UI->>User: Open Plaid Link modal
-    User->>Plaid: Select bank & authenticate
-    Plaid-->>UI: public_token + metadata
-    UI->>SA: exchangePublicToken(public_token)
-    SA->>Plaid: POST /item/public_token/exchange
-    Plaid-->>SA: access_token + item_id
-    SA->>Plaid: POST /processor/token/create
-    Plaid-->>SA: processor_token
-    SA->>Dwolla: Create funding source
-    Dwolla-->>SA: funding_source_url
-    SA->>DB: Store bank record
-    DB-->>SA: Success
-    SA-->>UI: Bank connected ✅
-    UI-->>User: Show new bank card
-```
-
-### Data Flow: ACH Transfer
-
-```mermaid
-sequenceDiagram
-    actor User
-    participant UI as Transfer Form
-    participant SA as dwolla.actions
-    participant Dwolla as Dwolla API
-    participant DB as Appwrite DB
-
-    User->>UI: Select source bank
-    User->>UI: Enter amount & recipient
-    User->>UI: Confirm transfer
-    UI->>SA: createTransfer({source, destination, amount})
-    SA->>Dwolla: POST /transfers
-    Dwolla-->>SA: transfer_url + status
-    SA->>DB: Log transaction
-    SA-->>UI: Transfer initiated ✅
-    UI-->>User: Show confirmation
-```
-
-### Razorpay UPI Payment Flow
-
-```mermaid
-sequenceDiagram
-    actor User
-    participant UI as RazorpayCheckout
-    participant SA as razorpay.actions
-    participant RZ as Razorpay API
-    participant DB as Appwrite DB
-
-    User->>UI: Enter amount & select UPI
-    UI->>SA: createRazorpayOrder(amount, "INR")
-    SA->>RZ: POST /orders
-    RZ-->>SA: order_id + amount
-    SA-->>UI: Order created
-    UI->>User: Open Razorpay modal
-    User->>RZ: Authenticate UPI payment
-    RZ-->>UI: payment_id + signature
-    UI->>SA: verifyRazorpayPayment(orderId, paymentId, signature)
-    SA->>SA: HMAC SHA256 verification
-    SA-->>UI: Verified ✅
-    UI->>SA: recordRazorpayPayment(...)
-    SA->>DB: Store payment record
-    DB-->>SA: Success
-    SA-->>UI: Payment recorded ✅
-    UI-->>User: 🎉 Payment Successful!
-```
-
----
-
-## 💸 Payment Flows
-
-BankVerse supports **two payment rails** — choose based on your region and needs:
-
-| | 🏦 Dwolla ACH | 📱 Razorpay / UPI |
-|---|---|---|
-| **Region** | United States | India |
-| **Speed** | 1-3 business days | Instant |
-| **Methods** | Bank-to-bank ACH | UPI, Card, Netbanking, Wallet |
-| **Currency** | USD | INR |
-| **Best for** | Large transfers, payroll | Everyday payments, e-commerce |
-| **Fees** | Low / Free | Competitive per-transaction |
-
-### Switching Payment Methods
-
-The `TransferForm` component renders a tabbed interface:
-
-```tsx
-// Payment method tabs in TransferForm.tsx
-<button onClick={() => setPaymentMethod("ach")}>
-  🏦 Bank Transfer (ACH)
-</button>
-<button onClick={() => setPaymentMethod("razorpay")}>
-  📱 Razorpay / UPI
-</button>
-
-// Conditional rendering
-{paymentMethod === "ach" && <ACHTransferForm />}
-{paymentMethod === "razorpay" && <RazorpayCheckout />}
+    C->>P: Pay ₹7,500
+    P->>L: Record DEBIT (customer -₹7,500)
+    Note over L: ❌ CREDIT never arrives<br/>(provider webhook delayed)
+    
+    R->>L: Fetch internal entries
+    R->>R: Match vs provider records
+    R->>I: DEBIT_WITHOUT_CREDIT detected
+    I->>I: Create CRITICAL incident
+    I->>O: Show on dashboard
+    
+    Note over O: Operator sees incident
+    O->>L: Initiate compensating CREDIT
+    L->>L: CREDIT customer +₹7,500
+    L->>L: SUM(debits) === SUM(credits) ✅
+    O->>I: Resolve incident
 ```
 
 ---
@@ -408,30 +149,23 @@ npm install
 
 ### 2. Environment Variables
 
-Create `.env.local` (or use the existing one with demo mode):
+Create `.env.local`:
 
 ```bash
 # ========== Demo Mode ==========
-# Set to "true" to skip auth & use mock data
 NEXT_PUBLIC_DEMO_MODE=true
 
-# ========== Appwrite ==========
+# ========== Appwrite (optional for production) ==========
 NEXT_PUBLIC_APPWRITE_ENDPOINT=https://cloud.appwrite.io/v1
 NEXT_PUBLIC_APPWRITE_PROJECT_ID=your-project-id
 NEXT_PUBLIC_APPWRITE_DATABASE_ID=your-database-id
 APPWRITE_API_KEY=your-api-key
 
-# ========== Plaid (optional) ==========
+# ========== Payment Providers (optional) ==========
 PLAID_CLIENT_ID=your-client-id
 PLAID_SECRET=your-sandbox-secret
-PLAID_ENV=sandbox
-
-# ========== Dwolla (optional) ==========
 DWOLLA_KEY=your-dwolla-key
 DWOLLA_SECRET=your-dwolla-secret
-DWOLLA_ENV=sandbox
-
-# ========== Razorpay (optional) ==========
 RAZORPAY_KEY_ID=rzp_test_xxx
 RAZORPAY_KEY_SECRET=xxx
 NEXT_PUBLIC_RAZORPAY_KEY_ID=rzp_test_xxx
@@ -440,47 +174,78 @@ NEXT_PUBLIC_RAZORPAY_KEY_ID=rzp_test_xxx
 NEXT_PUBLIC_SENTRY_DSN=your-sentry-dsn
 ```
 
-### 3. Run Development Server
+### 3. Run
 
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) 🎉
+Open [http://localhost:3000](http://localhost:3000).
 
-### 4. Docker (Production)
+### 4. Run the Test Suite
+
+```bash
+# All 38 tests across 6 phases
+curl http://localhost:3000/api/test-ledger          # Phase 1: 7 tests
+curl http://localhost:3000/api/test-payment         # Phase 2: 9 tests
+curl http://localhost:3000/api/test-reconciliation  # Phase 3: 7 tests
+curl http://localhost:3000/api/test-chaos           # Phase 4: 8 tests
+curl http://localhost:3000/api/test-operations      # Phase 5: 7 tests
+curl http://localhost:3000/api/test-debit-without-credit  # E2E: DEBIT_WITHOUT_CREDIT
+```
+
+### 5. Docker (Production)
 
 ```bash
 docker compose up --build
 ```
 
-The app will be available at `http://localhost:3000` with:
-- ✅ Non-root user (`nextjs:nodejs`)
-- ✅ Health check endpoint at `/api/health`
-- ✅ Multi-stage optimized image
-
 ---
 
-## �️ Tech Stack
+## ✨ Features
 
-| Layer | Technology | Why |
-|-------|-----------|-----|
-| **Framework** | Next.js 15 (App Router) | Server components, streaming, Turbopack |
-| **Language** | TypeScript 5 (strict) | Type safety, better DX |
-| **UI** | React 19 | Latest React with server components |
-| **Styling** | Tailwind CSS 3.4 + shadcn/ui | Utility-first, accessible components |
-| **Forms** | react-hook-form + zod | Performant forms with schema validation |
-| **Charts** | Chart.js + react-chartjs-2 | Doughnut, line, and bar charts |
-| **Animations** | react-countup | Animated number counters |
-| **Auth** | Appwrite | Managed auth with sessions |
-| **Database** | Appwrite DB | Document database with real-time |
-| **Bank Linking** | Plaid API | Bank account linking + transactions |
-| **ACH Payments** | Dwolla API | US bank-to-bank transfers |
-| **UPI Payments** | Razorpay | Indian UPI, Card, Netbanking, Wallet |
-| **Monitoring** | Sentry | Error tracking (client + server + edge) |
-| **CI/CD** | GitHub Actions | Automated lint, build, docker |
-| **Container** | Docker (multi-stage) | Production-ready Alpine image |
-| **Icons** | Lucide React | Consistent, tree-shakeable icon set |
+### 🛡️ Payment Reliability (Core)
+
+| Feature | Description |
+|---------|-------------|
+| **Double-Entry Ledger** | Append-only entries. SUM(debits) === SUM(credits) enforced. Reversals create new entries, never modify originals. |
+| **Automated Reconciliation** | Match internal ledger against provider records. Structured mismatch evidence (AMOUNT_MISMATCH, MISSING_INTERNAL, DEBIT_WITHOUT_CREDIT, DUPLICATE). |
+| **Dual-Dimension State Machine** | PaymentState (CREATED→PROCESSING→SUCCESS/FAILED) + SettlementState (NOT_REQUIRED→PENDING_RECONCILIATION→RECONCILING→RESOLVED/REFUNDED). |
+| **Idempotency** | Duplicate payment requests return the same transaction. No double-charges. |
+| **Chaos Engineering** | 8 failure scenarios: provider timeout, amount mismatch, duplicate charge, missing credit, webhook disorder, provider down, bulk mismatch, refund race condition. |
+| **Incident Correlation** | Groups related failures by provider + mismatch type + 5-min time window. 1,200 broken transactions = 1 incident, not 1,200. |
+| **Operations Dashboard** | Real-time KPIs: success rate, total volume, active incidents, reconciliation match rate, provider health. |
+
+### 🔐 Authentication & Security
+
+| Feature | Description |
+|---------|-------------|
+| Email/Password Auth | Secure sign-up & sign-in via Appwrite with session management |
+| Route Protection | Middleware-based redirects — unauthenticated users can't access dashboard |
+| Demo Mode | `NEXT_PUBLIC_DEMO_MODE=true` skips auth, uses mock data |
+| Rate Limiting | In-memory rate limiter on server actions (Redis-ready) |
+| CSRF Protection | Token-based CSRF prevention on all forms |
+| Input Sanitization | XSS prevention via HTML escaping |
+| Audit Logging | Track sign-ins, transfers, and profile changes |
+
+### 🏦 Banking & Payments
+
+| Feature | Description |
+|---------|-------------|
+| **Plaid Link** | Connect real bank accounts via Plaid sandbox |
+| **ACH Transfers** | Send money via Dwolla ACH |
+| **Razorpay UPI** | Pay via UPI apps (Google Pay, PhonePe, Paytm) with QR code |
+| **Razorpay Card** | Credit/debit card payments |
+| **Razorpay Netbanking** | Direct bank transfers via Indian netbanking |
+
+### 📊 Dashboard & Analytics
+
+| Feature | Description |
+|---------|-------------|
+| Total Balance | Sum across all linked accounts with count-up animation |
+| Spending by Category | Interactive doughnut chart |
+| Net Worth Trend | Line chart showing balance changes over time |
+| Recent Transactions | Latest transactions with channel badges and category tags |
 
 ---
 
@@ -490,153 +255,125 @@ The app will be available at `http://localhost:3000` with:
 bankverse/
 ├── app/
 │   ├── (auth)/                        # 🔓 Public routes
-│   │   ├── layout.tsx                 # Auth layout wrapper
-│   │   ├── sign-in/page.tsx           # Sign-in form
-│   │   └── sign-up/page.tsx           # Sign-up form
+│   │   ├── sign-in/page.tsx
+│   │   └── sign-up/page.tsx
 │   ├── (root)/                        # 🔒 Protected routes
-│   │   ├── layout.tsx                 # Sidebar + mobile nav
-│   │   ├── page.tsx                   # Dashboard home
+│   │   ├── page.tsx                   # Dashboard
 │   │   ├── my-banks/                  # Connected accounts
 │   │   ├── payment-transfer/          # ACH + Razorpay/UPI
-│   │   ├── profile/                   # User settings
-│   │   └── transaction-history/       # Full transaction log
-│   ├── api/health/route.ts            # Health check endpoint
-│   ├── globals.css                    # Global styles + Tailwind
-│   └── layout.tsx                     # Root layout
+│   │   ├── transaction-history/       # Full transaction log
+│   │   └── profile/                   # User settings
+│   └── api/
+│       ├── health/route.ts
+│       ├── test-ledger/route.ts       # Phase 1 tests
+│       ├── test-payment/route.ts      # Phase 2 tests
+│       ├── test-reconciliation/route.ts # Phase 3 tests
+│       ├── test-chaos/route.ts        # Phase 4 tests
+│       ├── test-operations/route.ts   # Phase 5 tests
+│       └── test-debit-without-credit/ # E2E test
 ├── components/
 │   ├── ui/                            # shadcn/ui primitives
-│   │   ├── button.tsx
-│   │   ├── form.tsx
-│   │   ├── input.tsx
-│   │   ├── label.tsx
-│   │   └── sheet.tsx
-│   ├── AnimatedCounter.tsx            # Count-up animation
-│   ├── AuthForm.tsx                   # Sign-in/up form
-│   ├── BankCard.tsx                   # Visual bank card
-│   ├── CustomInput.tsx                # Form input wrapper
-│   ├── DoughnutChart.tsx              # Spending by category
-│   ├── HeaderBox.tsx                  # Page header
-│   ├── MobileNav.tsx                  # Mobile navigation
-│   ├── RazorpayCheckout.tsx           # Razorpay payment UI
-│   ├── RightSidebar.tsx               # Dashboard sidebar
-│   ├── Sidebar.tsx                    # Main navigation
-│   ├── TotalBalanceBox.tsx            # Balance summary
-│   ├── TransactionsTable.tsx          # Transaction list with badges
-│   ├── TransferForm.tsx               # ACH + Razorpay tabs
-│   └── UpiQrCode.tsx                  # UPI QR code payment
+│   └── ...                            # UI components
 ├── lib/
-│   ├── actions/                       # Server actions
-│   │   ├── dwolla.actions.ts          # Dwolla ACH operations
-│   │   ├── plaid.actions.ts           # Plaid account operations
-│   │   ├── razorpay.actions.ts        # Razorpay payment operations
-│   │   └── user.actions.ts            # Auth + user operations
-│   ├── appwrite/                      # Appwrite SDK
-│   │   ├── auth.ts                    # Session management
-│   │   ├── config.ts                  # Client initialization
-│   │   └── db.ts                      # Database CRUD + mock data
-│   └── utils.ts                       # Shared utilities
-├── constants/index.ts                 # App constants + nav links
-├── middleware.ts                       # Auth route protection
-├── types/index.d.ts                   # TypeScript declarations
-├── docker-compose.yml                 # Docker Compose config
-├── Dockerfile                         # Multi-stage Docker build
-├── .github/workflows/                 # CI/CD pipelines
-├── next.config.ts                     # Next.js configuration
-├── tailwind.config.ts                 # Tailwind configuration
-├── tsconfig.json                      # TypeScript configuration
-└── package.json                       # Dependencies + scripts
+│   ├── ledger/                        # 📒 Double-entry ledger
+│   │   ├── ledger.service.ts          # Orchestration (public API)
+│   │   ├── repository.ts              # Data access (demo + Appwrite)
+│   │   ├── validation.ts              # Invariants (double-entry)
+│   │   ├── balance.ts                 # Derived balance computation
+│   │   └── types.ts                   # Type definitions
+│   ├── payment/                       # 💳 Payment orchestration
+│   │   ├── orchestrator.ts            # Full lifecycle with retries
+│   │   ├── state-machine.ts           # Dual-dimension FSM
+│   │   └── mock.provider.ts           # Test provider
+│   ├── reconciliation/                # 🔍 Automated reconciliation
+│   │   ├── engine.ts                  # Reconciliation runner
+│   │   ├── matcher.ts                 # Internal vs external matching
+│   │   └── types.ts                   # Reconciliation types
+│   ├── incidents/                     # 🚨 Incident management
+│   │   ├── detector.ts                # Incident detection
+│   │   └── correlator.ts              # Incident grouping
+│   ├── chaos/                         # 💥 Chaos engineering
+│   │   ├── scenarios.ts               # 8 failure scenarios
+│   │   └── injector.ts                # Chaos injection engine
+│   ├── security/                      # 🛡️ Security
+│   │   ├── rate-limit.ts
+│   │   ├── csrf.ts
+│   │   ├── sanitize.ts
+│   │   └── audit.ts
+│   └── actions/                       # Server actions
+├── middleware.ts
+├── docker-compose.yml
+├── Dockerfile
+└── package.json
 ```
+
+---
+
+## 🧪 Test Suite
+
+BankVerse ships with **38 automated tests** across 6 phases:
+
+| Phase | Endpoint | Tests | What it verifies |
+|-------|----------|-------|-----------------|
+| 1 | `/api/test-ledger` | 7 | Double-entry recording, idempotency, reversals, derived balances, integrity |
+| 2 | `/api/test-payment` | 9 | State machine transitions, mock provider, full payment flow, refunds |
+| 3 | `/api/test-reconciliation` | 7 | Internal/external matching, mismatch detection, evidence generation |
+| 4 | `/api/test-chaos` | 8 | Provider timeout, amount mismatch, duplicate charge, missing credit, webhook disorder, provider down, bulk mismatch, refund race condition |
+| 5 | `/api/test-operations` | 7 | Incident detection, reconciliation incidents, operations snapshot, incident lifecycle, API endpoint, provider health, incident correlation |
+| E2E | `/api/test-debit-without-credit` | 1 | Full DEBIT_WITHOUT_CREDIT lifecycle: payment → detection → incident → recovery → resolution |
+
+---
+
+## 🛠️ Tech Stack
+
+| Layer | Technology | Why |
+|-------|-----------|-----|
+| **Framework** | Next.js 16 (App Router) | Server components, streaming, Turbopack |
+| **Language** | TypeScript 5 (strict) | Type safety |
+| **UI** | React 19 + Tailwind CSS 3.4 + shadcn/ui | Accessible, utility-first |
+| **Forms** | react-hook-form + zod | Schema validation |
+| **Charts** | Chart.js + react-chartjs-2 | Analytics visualization |
+| **Auth** | Appwrite | Managed auth with sessions |
+| **Database** | Appwrite DB | Document database |
+| **Bank Linking** | Plaid API | Account linking + transactions |
+| **ACH Payments** | Dwolla API | US bank-to-bank transfers |
+| **UPI Payments** | Razorpay | Indian UPI, Card, Netbanking |
+| **Monitoring** | Sentry | Error tracking (client + server + edge) |
+| **CI/CD** | GitHub Actions | Lint → Build → Docker |
+| **Container** | Docker (multi-stage) | Production-ready Alpine image |
 
 ---
 
 ## 🔒 Security
 
-BankVerse implements multiple layers of security:
-
 | Mechanism | File | Description |
 |-----------|------|-------------|
-| **Rate Limiting** | `lib/security/rate-limit.ts` | In-memory rate limiter (Redis-ready for production) |
-| **CSRF Protection** | `lib/security/csrf.ts` | Token-based CSRF prevention for forms |
-| **Input Sanitization** | `lib/security/sanitize.ts` | XSS prevention via HTML escaping |
+| **Rate Limiting** | `lib/security/rate-limit.ts` | In-memory rate limiter (Redis-ready) |
+| **CSRF Protection** | `lib/security/csrf.ts` | Token-based CSRF prevention |
+| **Input Sanitization** | `lib/security/sanitize.ts` | XSS prevention |
 | **Audit Logging** | `lib/security/audit.ts` | Track sign-ins, transfers, profile changes |
 | **Middleware** | `middleware.ts` | Route protection + auth redirects |
 | **Non-root User** | `Dockerfile` | Container runs as `nextjs:nodejs` |
-| **Health Check** | `app/api/health/` | Monitoring endpoint for orchestration |
-| **Demo Mode Guard** | All server actions | `NEXT_PUBLIC_DEMO_MODE` check before calling external APIs |
-
----
-
-## 🚢 CI/CD Pipeline
-
-```mermaid
-graph LR
-    A["Push to main"] --> B["Lint<br/>next lint"]
-    B --> C["Type Check<br/>tsc --noEmit"]
-    C --> D["Build<br/>next build"]
-    D --> E["Docker Build<br/>Multi-stage"]
-    E --> F["Push to Registry"]
-    F --> G["Deploy<br/>Vercel"]
-```
-
-### GitHub Actions Workflows
-
-- **`ci.yml`** — Runs on every push: lint → type-check → build → docker build
-- **`deploy.yml`** — Deploys to Vercel on main branch pushes
-
----
-
-## 🧪 API Reference
-
-### Health Check
-
-```http
-GET /api/health
-```
-
-**Response:**
-```json
-{
-  "status": "healthy",
-  "timestamp": "2026-08-01T12:00:00.000Z",
-  "uptime": 3600.123,
-  "environment": "production"
-}
-```
-
-### Server Actions
-
-| Action | File | Description |
-|--------|------|-------------|
-| `signUp()` | `user.actions.ts` | Create account + Appwrite session |
-| `signIn()` | `user.actions.ts` | Email/password sign-in |
-| `signOut()` | `user.actions.ts` | Delete current session |
-| `getCurrentUser()` | `user.actions.ts` | Get logged-in user from session |
-| `createLinkToken()` | `plaid.actions.ts` | Generate Plaid Link token |
-| `exchangePublicToken()` | `plaid.actions.ts` | Exchange for access token |
-| `getAccounts()` | `plaid.actions.ts` | Fetch linked bank accounts |
-| `getTransactions()` | `plaid.actions.ts` | Fetch transaction history |
-| `createTransfer()` | `dwolla.actions.ts` | Initiate ACH transfer |
-| `createDwollaCustomer()` | `dwolla.actions.ts` | Create Dwolla customer |
-| `createRazorpayOrder()` | `razorpay.actions.ts` | Create Razorpay payment order |
-| `verifyRazorpayPayment()` | `razorpay.actions.ts` | Verify HMAC payment signature |
-| `recordRazorpayPayment()` | `razorpay.actions.ts` | Record payment in database |
+| **Health Check** | `app/api/health/` | Monitoring endpoint |
 
 ---
 
 ## 🎯 Roadmap
 
-- [x] Plaid bank account linking
-- [x] Dwolla ACH transfers
-- [x] Razorpay UPI / Card / Netbanking / Wallet
-- [x] Interactive dashboard with charts
-- [x] Demo mode for development
-- [x] Docker + CI/CD
-- [ ] Real-time transaction notifications (WebSocket)
-- [ ] Bill pay & recurring payments
-- [ ] Budget tracking & goals
-- [ ] Multi-currency support
-- [ ] Mobile app (React Native)
-- [ ] AI-powered spending insights
+- [x] Double-entry ledger with append-only entries
+- [x] Payment orchestrator with state machine
+- [x] Automated reconciliation engine
+- [x] Chaos engineering (8 failure scenarios)
+- [x] Incident detection + correlation
+- [x] Operations dashboard
+- [x] DEBIT_WITHOUT_CREDIT end-to-end recovery
+- [ ] Real-time WebSocket notifications for incidents
+- [ ] Redis-backed rate limiting for production
+- [ ] PostgreSQL adapter for ledger (alongside Appwrite)
+- [ ] Scheduled reconciliation (cron-based)
+- [ ] PagerDuty / Slack incident alerts
+- [ ] Multi-currency ledger support
+- [ ] SOC 2 compliance evidence export
 
 ---
 
@@ -654,7 +391,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## 📄 License
 
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+MIT License — see [LICENSE](LICENSE).
 
 ---
 
@@ -664,6 +401,6 @@ This project is licensed under the MIT License — see the [LICENSE](LICENSE) fi
 
 ⭐ **Star this repo** if you find it useful!
 
-[⬆ Back to Top](#-bankverse--modern-banking-platform)
+[⬆ Back to Top](#%EF%B8%8F-bankverse--payment-reliability-platform)
 
 </div>

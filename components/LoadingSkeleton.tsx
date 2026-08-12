@@ -59,3 +59,7 @@ export const DashboardSkeleton = () => (
     </div>
   </div>
 );
+
+// Default export for backward compatibility
+const LoadingSkeleton = DashboardSkeleton;
+export default LoadingSkeleton;

@@ -5,8 +5,6 @@
  * The Chaos Lab proves the system handles failure modes correctly.
  */
 
-import type { IncidentSeverity } from "@/types";
-
 export interface ChaosScenarioDef {
   id: string;
   name: string;

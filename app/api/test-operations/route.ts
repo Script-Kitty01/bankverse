@@ -5,7 +5,8 @@
  */
 
 import { NextResponse } from "next/server";
-import { IncidentDetector } from "@/lib/incidents/detector";
+import { IncidentDetector, type PaymentIncident } from "@/lib/incidents/detector";
+import { IncidentCorrelator } from "@/lib/incidents/correlator";
 import { getAllPaymentTransactions } from "@/lib/ledger/ledger.service";
 import { getReconciliationEngine } from "@/lib/reconciliation/engine";
 import { MockPaymentProvider } from "@/lib/payment/mock.provider";
@@ -184,6 +185,72 @@ export async function GET() {
   } catch (e: any) {
     results["provider-health"] = {
       name: "Provider Health Check",
+      passed: false,
+      actualBehavior: `Error: ${e.message}`,
+    };
+    failed++;
+  }
+
+  // Test 7: Incident correlation — same provider+type+window merges
+  try {
+    const now = new Date().toISOString();
+    const baseIncident: PaymentIncident = {
+      id: "inc_corr_test_1",
+      title: "AMOUNT_MISMATCH on razorpay — 5 items",
+      severity: "HIGH",
+      status: "DETECTED",
+      provider: "razorpay",
+      affectedTransactionCount: 5,
+      totalAffectedAmount: 5000,
+      mismatchTypes: ["AMOUNT_MISMATCH"],
+      reconciliationItemIds: ["r1", "r2", "r3", "r4", "r5"],
+      detectedAt: now,
+      resolvedAt: null,
+      resolution: null,
+    };
+
+    // First incident stands alone
+    const result1 = IncidentCorrelator.correlate(baseIncident, []);
+    const standalone = !result1.wasMerged;
+
+    // Second incident with same provider+type+window should merge
+    const similarIncident: PaymentIncident = {
+      ...baseIncident,
+      id: "inc_corr_test_2",
+      affectedTransactionCount: 1200,
+      totalAffectedAmount: 500000,
+      reconciliationItemIds: ["r6"],
+    };
+    const result2 = IncidentCorrelator.correlate(similarIncident, [baseIncident]);
+    const merged = result2.wasMerged && result2.mergedIntoId === "inc_corr_test_1";
+    const escalated = result2.incident.affectedTransactionCount === 1205; // 5 + 1200
+    const amountSum = result2.incident.totalAffectedAmount === 505000; // 5000 + 500000
+
+    // Third incident with different provider should NOT merge
+    const differentProvider: PaymentIncident = {
+      ...baseIncident,
+      id: "inc_corr_test_3",
+      provider: "dwolla",
+    };
+    const result3 = IncidentCorrelator.correlate(differentProvider, [
+      baseIncident,
+    ]);
+    const notMerged = !result3.wasMerged;
+
+    const allPassed = standalone && merged && escalated && amountSum && notMerged;
+
+    results["incident-correlation"] = {
+      name: "Incident Correlation (same provider+type+window merges)",
+      passed: allPassed,
+      actualBehavior: allPassed
+        ? `Standalone: ${standalone}, Merged: ${merged}, Count escalated: ${escalated} (1205), Amount summed: ${amountSum} (505000), Different provider not merged: ${notMerged}`
+        : `Standalone=${standalone} Merged=${merged} Escalated=${escalated} Amount=${amountSum} NotMerged=${notMerged}`,
+    };
+    if (allPassed) passed++;
+    else failed++;
+  } catch (e: any) {
+    results["incident-correlation"] = {
+      name: "Incident Correlation",
       passed: false,
       actualBehavior: `Error: ${e.message}`,
     };
