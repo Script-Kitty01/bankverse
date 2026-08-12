@@ -19,7 +19,7 @@
 
 # 🏦 BankVerse
 
-### _The Open-Source Banking Experience_
+### *The Open-Source Banking Experience*
 
 **Connect real bank accounts • Send ACH & UPI payments • Track spending with beautiful charts**
 
@@ -82,70 +82,63 @@ graph TB
 ## ✨ Features
 
 ### 🔐 Authentication & Security
-
-| Feature             | Description                                                               |
-| ------------------- | ------------------------------------------------------------------------- |
-| Email/Password Auth | Secure sign-up & sign-in via Appwrite with session management             |
-| Route Protection    | Middleware-based redirects — unauthenticated users can't access dashboard |
-| Demo Mode           | `NEXT_PUBLIC_DEMO_MODE=true` skips auth, uses mock data for development   |
-| Rate Limiting       | In-memory rate limiter on server actions (Redis-ready for production)     |
-| CSRF Protection     | Token-based CSRF prevention on all forms                                  |
-| Input Sanitization  | XSS prevention via HTML escaping                                          |
-| Audit Logging       | Track sign-ins, transfers, and profile changes                            |
+| Feature | Description |
+|---------|-------------|
+| Email/Password Auth | Secure sign-up & sign-in via Appwrite with session management |
+| Route Protection | Middleware-based redirects — unauthenticated users can't access dashboard |
+| Demo Mode | `NEXT_PUBLIC_DEMO_MODE=true` skips auth, uses mock data for development |
+| Rate Limiting | In-memory rate limiter on server actions (Redis-ready for production) |
+| CSRF Protection | Token-based CSRF prevention on all forms |
+| Input Sanitization | XSS prevention via HTML escaping |
+| Audit Logging | Track sign-ins, transfers, and profile changes |
 
 ### 🏦 Banking & Payments
-
-| Feature                 | Description                                                                   |
-| ----------------------- | ----------------------------------------------------------------------------- |
-| **Plaid Link**          | Connect real bank accounts (Chase, BofA, Wells Fargo, etc.) via Plaid sandbox |
-| **Account Balances**    | Real-time balance fetching with animated counters                             |
-| **ACH Transfers**       | Send money between accounts via Dwolla ACH with multi-step confirmation       |
-| **Razorpay UPI**        | Pay via UPI apps (Google Pay, PhonePe, Paytm) with QR code or UPI ID          |
-| **Razorpay Card**       | Credit/debit card payments through Razorpay checkout                          |
-| **Razorpay Netbanking** | Direct bank transfers via Indian netbanking                                   |
-| **Razorpay Wallet**     | Wallet payments (Paytm, Mobikwik, etc.)                                       |
+| Feature | Description |
+|---------|-------------|
+| **Plaid Link** | Connect real bank accounts (Chase, BofA, Wells Fargo, etc.) via Plaid sandbox |
+| **Account Balances** | Real-time balance fetching with animated counters |
+| **ACH Transfers** | Send money between accounts via Dwolla ACH with multi-step confirmation |
+| **Razorpay UPI** | Pay via UPI apps (Google Pay, PhonePe, Paytm) with QR code or UPI ID |
+| **Razorpay Card** | Credit/debit card payments through Razorpay checkout |
+| **Razorpay Netbanking** | Direct bank transfers via Indian netbanking |
+| **Razorpay Wallet** | Wallet payments (Paytm, Mobikwik, etc.) |
 
 ### 📊 Dashboard & Analytics
-
-| Feature              | Description                                                  |
-| -------------------- | ------------------------------------------------------------ |
-| Total Balance        | Sum across all linked accounts with count-up animation       |
-| Spending by Category | Interactive doughnut chart with color-coded categories       |
-| Net Worth Trend      | Line chart showing balance changes over time                 |
-| Recent Transactions  | Latest 10 transactions with channel badges and category tags |
+| Feature | Description |
+|---------|-------------|
+| Total Balance | Sum across all linked accounts with count-up animation |
+| Spending by Category | Interactive doughnut chart with color-coded categories |
+| Net Worth Trend | Line chart showing balance changes over time |
+| Recent Transactions | Latest 10 transactions with channel badges and category tags |
 
 ### 💳 Account Management
-
-| Feature              | Description                                                    |
-| -------------------- | -------------------------------------------------------------- |
-| Bank Cards           | Visual card display with masked account numbers and bank logos |
-| Connect / Disconnect | Add new banks or remove existing connections                   |
-| Multiple Accounts    | Support for checking, savings, credit, and investment accounts |
+| Feature | Description |
+|---------|-------------|
+| Bank Cards | Visual card display with masked account numbers and bank logos |
+| Connect / Disconnect | Add new banks or remove existing connections |
+| Multiple Accounts | Support for checking, savings, credit, and investment accounts |
 
 ### 📋 Transaction History
-
-| Feature           | Description                                                                |
-| ----------------- | -------------------------------------------------------------------------- |
-| Full History      | Paginated, searchable transaction log across all accounts                  |
-| Channel Badges    | Color-coded badges: 🟣 UPI, 🟠 Card, 🔵 Netbanking, ⚪ Online, 🟡 In Store |
-| Category Tags     | Visual category chips (Food, Travel, Shopping, Transfer, etc.)             |
-| Status Indicators | Pending / Completed status with animated badges                            |
+| Feature | Description |
+|---------|-------------|
+| Full History | Paginated, searchable transaction log across all accounts |
+| Channel Badges | Color-coded badges: 🟣 UPI, 🟠 Card, 🔵 Netbanking, ⚪ Online, 🟡 In Store |
+| Category Tags | Visual category chips (Food, Travel, Shopping, Transfer, etc.) |
+| Status Indicators | Pending / Completed status with animated badges |
 
 ### 📱 User Experience
-
-| Feature           | Description                                            |
-| ----------------- | ------------------------------------------------------ |
+| Feature | Description |
+|---------|-------------|
 | Responsive Design | Mobile sidebar + adaptive layouts for all screen sizes |
-| Loading States    | Skeleton loaders on every page for smooth UX           |
-| SEO Optimized     | Dynamic sitemap, robots.txt, per-page metadata         |
-| Dark Mode Ready   | Tailwind-based theming infrastructure                  |
+| Loading States | Skeleton loaders on every page for smooth UX |
+| SEO Optimized | Dynamic sitemap, robots.txt, per-page metadata |
+| Dark Mode Ready | Tailwind-based theming infrastructure |
 
 ---
 
 ## � Live Demo
 
 ### 🏠 Dashboard
-
 ```
 ┌──────────────────────────────────────────────────────────┐
 │  🏦 BankVerse    🔍 Search...         👤 John Doe       │
@@ -365,14 +358,14 @@ sequenceDiagram
 
 BankVerse supports **two payment rails** — choose based on your region and needs:
 
-|              | 🏦 Dwolla ACH            | 📱 Razorpay / UPI             |
-| ------------ | ------------------------ | ----------------------------- |
-| **Region**   | United States            | India                         |
-| **Speed**    | 1-3 business days        | Instant                       |
-| **Methods**  | Bank-to-bank ACH         | UPI, Card, Netbanking, Wallet |
-| **Currency** | USD                      | INR                           |
+| | 🏦 Dwolla ACH | 📱 Razorpay / UPI |
+|---|---|---|
+| **Region** | United States | India |
+| **Speed** | 1-3 business days | Instant |
+| **Methods** | Bank-to-bank ACH | UPI, Card, Netbanking, Wallet |
+| **Currency** | USD | INR |
 | **Best for** | Large transfers, payroll | Everyday payments, e-commerce |
-| **Fees**     | Low / Free               | Competitive per-transaction   |
+| **Fees** | Low / Free | Competitive per-transaction |
 
 ### Switching Payment Methods
 
@@ -398,10 +391,10 @@ The `TransferForm` component renders a tabbed interface:
 
 ### Prerequisites
 
-| Tool    | Version | Purpose         |
-| ------- | ------- | --------------- |
-| Node.js | 20+     | Runtime         |
-| npm     | 10+     | Package manager |
+| Tool | Version | Purpose |
+|------|---------|---------|
+| Node.js | 20+ | Runtime |
+| npm | 10+ | Package manager |
 
 > 💡 **No API keys needed for demo mode!** Just clone, install, and run.
 
@@ -462,7 +455,6 @@ docker compose up --build
 ```
 
 The app will be available at `http://localhost:3000` with:
-
 - ✅ Non-root user (`nextjs:nodejs`)
 - ✅ Health check endpoint at `/api/health`
 - ✅ Multi-stage optimized image
@@ -471,24 +463,24 @@ The app will be available at `http://localhost:3000` with:
 
 ## �️ Tech Stack
 
-| Layer            | Technology                   | Why                                     |
-| ---------------- | ---------------------------- | --------------------------------------- |
-| **Framework**    | Next.js 15 (App Router)      | Server components, streaming, Turbopack |
-| **Language**     | TypeScript 5 (strict)        | Type safety, better DX                  |
-| **UI**           | React 19                     | Latest React with server components     |
-| **Styling**      | Tailwind CSS 3.4 + shadcn/ui | Utility-first, accessible components    |
-| **Forms**        | react-hook-form + zod        | Performant forms with schema validation |
-| **Charts**       | Chart.js + react-chartjs-2   | Doughnut, line, and bar charts          |
-| **Animations**   | react-countup                | Animated number counters                |
-| **Auth**         | Appwrite                     | Managed auth with sessions              |
-| **Database**     | Appwrite DB                  | Document database with real-time        |
-| **Bank Linking** | Plaid API                    | Bank account linking + transactions     |
-| **ACH Payments** | Dwolla API                   | US bank-to-bank transfers               |
-| **UPI Payments** | Razorpay                     | Indian UPI, Card, Netbanking, Wallet    |
-| **Monitoring**   | Sentry                       | Error tracking (client + server + edge) |
-| **CI/CD**        | GitHub Actions               | Automated lint, build, docker           |
-| **Container**    | Docker (multi-stage)         | Production-ready Alpine image           |
-| **Icons**        | Lucide React                 | Consistent, tree-shakeable icon set     |
+| Layer | Technology | Why |
+|-------|-----------|-----|
+| **Framework** | Next.js 15 (App Router) | Server components, streaming, Turbopack |
+| **Language** | TypeScript 5 (strict) | Type safety, better DX |
+| **UI** | React 19 | Latest React with server components |
+| **Styling** | Tailwind CSS 3.4 + shadcn/ui | Utility-first, accessible components |
+| **Forms** | react-hook-form + zod | Performant forms with schema validation |
+| **Charts** | Chart.js + react-chartjs-2 | Doughnut, line, and bar charts |
+| **Animations** | react-countup | Animated number counters |
+| **Auth** | Appwrite | Managed auth with sessions |
+| **Database** | Appwrite DB | Document database with real-time |
+| **Bank Linking** | Plaid API | Bank account linking + transactions |
+| **ACH Payments** | Dwolla API | US bank-to-bank transfers |
+| **UPI Payments** | Razorpay | Indian UPI, Card, Netbanking, Wallet |
+| **Monitoring** | Sentry | Error tracking (client + server + edge) |
+| **CI/CD** | GitHub Actions | Automated lint, build, docker |
+| **Container** | Docker (multi-stage) | Production-ready Alpine image |
+| **Icons** | Lucide React | Consistent, tree-shakeable icon set |
 
 ---
 
@@ -561,16 +553,16 @@ bankverse/
 
 BankVerse implements multiple layers of security:
 
-| Mechanism              | File                         | Description                                                |
-| ---------------------- | ---------------------------- | ---------------------------------------------------------- |
-| **Rate Limiting**      | `lib/security/rate-limit.ts` | In-memory rate limiter (Redis-ready for production)        |
-| **CSRF Protection**    | `lib/security/csrf.ts`       | Token-based CSRF prevention for forms                      |
-| **Input Sanitization** | `lib/security/sanitize.ts`   | XSS prevention via HTML escaping                           |
-| **Audit Logging**      | `lib/security/audit.ts`      | Track sign-ins, transfers, profile changes                 |
-| **Middleware**         | `middleware.ts`              | Route protection + auth redirects                          |
-| **Non-root User**      | `Dockerfile`                 | Container runs as `nextjs:nodejs`                          |
-| **Health Check**       | `app/api/health/`            | Monitoring endpoint for orchestration                      |
-| **Demo Mode Guard**    | All server actions           | `NEXT_PUBLIC_DEMO_MODE` check before calling external APIs |
+| Mechanism | File | Description |
+|-----------|------|-------------|
+| **Rate Limiting** | `lib/security/rate-limit.ts` | In-memory rate limiter (Redis-ready for production) |
+| **CSRF Protection** | `lib/security/csrf.ts` | Token-based CSRF prevention for forms |
+| **Input Sanitization** | `lib/security/sanitize.ts` | XSS prevention via HTML escaping |
+| **Audit Logging** | `lib/security/audit.ts` | Track sign-ins, transfers, profile changes |
+| **Middleware** | `middleware.ts` | Route protection + auth redirects |
+| **Non-root User** | `Dockerfile` | Container runs as `nextjs:nodejs` |
+| **Health Check** | `app/api/health/` | Monitoring endpoint for orchestration |
+| **Demo Mode Guard** | All server actions | `NEXT_PUBLIC_DEMO_MODE` check before calling external APIs |
 
 ---
 
@@ -602,7 +594,6 @@ GET /api/health
 ```
 
 **Response:**
-
 ```json
 {
   "status": "healthy",
@@ -614,21 +605,21 @@ GET /api/health
 
 ### Server Actions
 
-| Action                    | File                  | Description                       |
-| ------------------------- | --------------------- | --------------------------------- |
-| `signUp()`                | `user.actions.ts`     | Create account + Appwrite session |
-| `signIn()`                | `user.actions.ts`     | Email/password sign-in            |
-| `signOut()`               | `user.actions.ts`     | Delete current session            |
-| `getCurrentUser()`        | `user.actions.ts`     | Get logged-in user from session   |
-| `createLinkToken()`       | `plaid.actions.ts`    | Generate Plaid Link token         |
-| `exchangePublicToken()`   | `plaid.actions.ts`    | Exchange for access token         |
-| `getAccounts()`           | `plaid.actions.ts`    | Fetch linked bank accounts        |
-| `getTransactions()`       | `plaid.actions.ts`    | Fetch transaction history         |
-| `createTransfer()`        | `dwolla.actions.ts`   | Initiate ACH transfer             |
-| `createDwollaCustomer()`  | `dwolla.actions.ts`   | Create Dwolla customer            |
-| `createRazorpayOrder()`   | `razorpay.actions.ts` | Create Razorpay payment order     |
-| `verifyRazorpayPayment()` | `razorpay.actions.ts` | Verify HMAC payment signature     |
-| `recordRazorpayPayment()` | `razorpay.actions.ts` | Record payment in database        |
+| Action | File | Description |
+|--------|------|-------------|
+| `signUp()` | `user.actions.ts` | Create account + Appwrite session |
+| `signIn()` | `user.actions.ts` | Email/password sign-in |
+| `signOut()` | `user.actions.ts` | Delete current session |
+| `getCurrentUser()` | `user.actions.ts` | Get logged-in user from session |
+| `createLinkToken()` | `plaid.actions.ts` | Generate Plaid Link token |
+| `exchangePublicToken()` | `plaid.actions.ts` | Exchange for access token |
+| `getAccounts()` | `plaid.actions.ts` | Fetch linked bank accounts |
+| `getTransactions()` | `plaid.actions.ts` | Fetch transaction history |
+| `createTransfer()` | `dwolla.actions.ts` | Initiate ACH transfer |
+| `createDwollaCustomer()` | `dwolla.actions.ts` | Create Dwolla customer |
+| `createRazorpayOrder()` | `razorpay.actions.ts` | Create Razorpay payment order |
+| `verifyRazorpayPayment()` | `razorpay.actions.ts` | Verify HMAC payment signature |
+| `recordRazorpayPayment()` | `razorpay.actions.ts` | Record payment in database |
 
 ---
 

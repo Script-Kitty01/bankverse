@@ -3,6 +3,7 @@
 import Razorpay from "razorpay";
 import { createPaymentRecord } from "@/lib/appwrite/db";
 import { getCurrentUser } from "./user.actions";
+import { recordTransaction } from "@/lib/ledger/ledger.service";
 import crypto from "crypto";
 
 /**
@@ -111,6 +112,7 @@ export const recordRazorpayPayment = async (params: {
     const user = await getCurrentUser();
     const userId = user?.userId || "demo-user";
 
+    // 1. Record the payment in the payments collection
     const payment = await createPaymentRecord({
       userId,
       razorpayOrderId: params.razorpayOrderId,
@@ -119,6 +121,21 @@ export const recordRazorpayPayment = async (params: {
       currency: params.currency,
       status: "paid",
       method: params.method,
+      description: params.description,
+    });
+
+    // 2. Record a double-entry ledger transaction
+    //    DEBIT the customer (money leaves their account)
+    //    CREDIT the merchant (money enters the merchant account)
+    const idempotencyKey = `rzp_${params.razorpayPaymentId}`;
+    await recordTransaction({
+      customerId: userId,
+      merchantId: "bankverse_merchant",
+      amount: params.amount,
+      currency: params.currency,
+      provider: "razorpay",
+      providerReference: params.razorpayPaymentId,
+      idempotencyKey,
       description: params.description,
     });
 

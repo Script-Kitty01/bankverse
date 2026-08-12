@@ -1,0 +1,110 @@
+/**
+ * BankVerse — Chaos Engineering Scenarios
+ *
+ * Each scenario follows: INJECT → OBSERVE → VERIFY → PASS/FAIL
+ * The Chaos Lab proves the system handles failure modes correctly.
+ */
+
+import type { IncidentSeverity } from "@/types";
+
+export interface ChaosScenarioDef {
+  id: string;
+  name: string;
+  description: string;
+  severity: IncidentSeverity;
+  /** What the injection does */
+  injectDescription: string;
+  /** What the system should do in response */
+  expectedBehavior: string;
+}
+
+export const CHAOS_SCENARIOS: ChaosScenarioDef[] = [
+  {
+    id: "provider-timeout",
+    name: "Provider Timeout",
+    description:
+      "Payment provider times out after 30s — orchestrator must detect UNKNOWN state and trigger reconciliation.",
+    severity: "HIGH",
+    injectDescription:
+      "Mock PSP configured to return 504 Gateway Timeout after 30s delay.",
+    expectedBehavior:
+      "Orchestrator sets paymentState to UNKNOWN → settlementState to PENDING_RECONCILIATION → reconciliation detects orphan transaction.",
+  },
+  {
+    id: "amount-mismatch",
+    name: "Amount Mismatch",
+    description:
+      "Provider debits ₹500 but internal ledger records ₹5000 — reconciliation must detect AMOUNT_MISMATCH.",
+    severity: "HIGH",
+    injectDescription:
+      "External record amount differs from internal transaction amount by 10x.",
+    expectedBehavior:
+      "Reconciliation detects AMOUNT_MISMATCH → evidence shows internal.amount vs provider.amount → settlement enters PENDING_RECONCILIATION.",
+  },
+  {
+    id: "duplicate-charge",
+    name: "Duplicate Charge",
+    description:
+      "Same payment processed twice — reconciliation must detect DUPLICATE and flag for refund.",
+    severity: "CRITICAL",
+    injectDescription:
+      "Two external provider records exist for a single internal transaction.",
+    expectedBehavior:
+      "Reconciliation detects duplicate → one item MATCHED, one UNMATCHED (MISSING_INTERNAL) → settlement enters REFUND_PENDING for duplicate.",
+  },
+  {
+    id: "missing-credit",
+    name: "Missing Credit (DEBIT_WITHOUT_CREDIT)",
+    description:
+      "Debit succeeds but credit never arrives — ledger integrity check must detect the imbalance.",
+    severity: "CRITICAL",
+    injectDescription:
+      "Only a DEBIT entry exists in the ledger; the corresponding CREDIT entry is missing.",
+    expectedBehavior:
+      "Ledger integrity check fails → reconciliation detects DEBIT_WITHOUT_CREDIT → evidence shows ledger.debit > ledger.credit → settlement enters PENDING_RECONCILIATION.",
+  },
+  {
+    id: "webhook-out-of-order",
+    name: "Webhook Out of Order",
+    description:
+      "SUCCESS webhook arrives after FAILED webhook — state machine must reject invalid transition.",
+    severity: "MEDIUM",
+    injectDescription:
+      "Send webhooks in reverse order: FAILED first, then SUCCESS.",
+    expectedBehavior:
+      "State machine rejects SUCCESS → PROCESSING transition (payment already FAILED) → payment stays FAILED → reconciliation confirms correct state.",
+  },
+  {
+    id: "provider-down",
+    name: "Provider Down",
+    description:
+      "All requests to payment provider fail — orchestrator must fail gracefully without corrupting state.",
+    severity: "HIGH",
+    injectDescription:
+      "Mock PSP configured to reject all requests with connection error.",
+    expectedBehavior:
+      "Orchestrator sets paymentState to FAILED → settlementState to NOT_REQUIRED → no reconciliation needed → no money moved.",
+  },
+  {
+    id: "slow-reconciliation",
+    name: "Slow Reconciliation (Bulk Mismatch)",
+    description:
+      "1000 transactions with 50 mismatches — reconciliation must complete and classify all mismatches.",
+    severity: "MEDIUM",
+    injectDescription:
+      "Generate 1000 transactions, 50 with intentional amount mismatches.",
+    expectedBehavior:
+      "Reconciliation completes within reasonable time → all 50 mismatches have structured evidence → incident detection groups by provider.",
+  },
+  {
+    id: "refund-race-condition",
+    name: "Refund Race Condition",
+    description:
+      "Refund initiated while payment still PROCESSING — state machine must queue refund until terminal.",
+    severity: "MEDIUM",
+    injectDescription:
+      "Initiate refund immediately after payment creation, before provider responds.",
+    expectedBehavior:
+      "State machine queues refund until payment reaches terminal state → settlement transitions correctly to REFUNDED → RESOLVED.",
+  },
+];

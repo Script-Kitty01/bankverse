@@ -364,3 +364,170 @@ declare interface getBankProps {
 declare interface getBankByAccountIdProps {
   accountId: string;
 }
+
+// ========================================
+// BankVerse — Payment Reliability Types
+// ========================================
+
+declare type LedgerEntryType = "DEBIT" | "CREDIT";
+
+declare type PaymentState =
+  | "CREATED"
+  | "PROCESSING"
+  | "SUCCESS"
+  | "FAILED"
+  | "UNKNOWN";
+
+declare type SettlementState =
+  | "NOT_REQUIRED"
+  | "PENDING_RECONCILIATION"
+  | "RECONCILING"
+  | "REFUND_PENDING"
+  | "REFUNDED"
+  | "RESOLVED"
+  | "ESCALATED";
+
+declare type MatchStatus = "MATCHED" | "MISMATCH";
+
+declare type MismatchType =
+  | "AMOUNT_MISMATCH"
+  | "STATUS_MISMATCH"
+  | "MISSING_PROVIDER_RECORD"
+  | "MISSING_INTERNAL_RECORD"
+  | "DUPLICATE_PROVIDER_RECORD"
+  | "LEDGER_MISMATCH"
+  | "DEBIT_WITHOUT_CREDIT";
+
+declare type MatchMethod =
+  | "exactReference"
+  | "amountCurrency"
+  | "amountCustomerTime";
+
+declare type IncidentSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+
+declare type IncidentStatus =
+  | "DETECTED"
+  | "INVESTIGATING"
+  | "ACTION_REQUIRED"
+  | "RESOLVED"
+  | "DISMISSED";
+
+declare interface LedgerEntry {
+  id: string;
+  transactionId: string;
+  accountId: string;
+  entryType: LedgerEntryType;
+  amount: number;
+  currency: string;
+  description: string;
+  createdAt: string;
+}
+
+declare interface LedgerAccount {
+  id: string;
+  userId: string;
+  currency: string;
+  totalDebits: number;
+  totalCredits: number;
+  derivedBalance: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+declare interface PaymentTransaction {
+  id: string;
+  customerId: string;
+  merchantId: string;
+  amount: number;
+  currency: string;
+  paymentState: PaymentState;
+  settlementState: SettlementState;
+  provider: string;
+  providerReference: string;
+  idempotencyKey: string;
+  retryCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+declare interface ReconciliationRun {
+  id: string;
+  startedAt: string;
+  completedAt: string | null;
+  status: "RUNNING" | "COMPLETED" | "FAILED";
+  recordsProcessed: number;
+  matchedCount: number;
+  mismatchCount: number;
+}
+
+declare interface ReconciliationItem {
+  id: string;
+  runId: string;
+  transactionId: string;
+  matchStatus: MatchStatus;
+  mismatchType: MismatchType | null;
+  evidence: ReconciliationEvidence | null;
+  resolvedAt: string | null;
+  resolution: string | null;
+}
+
+declare interface ReconciliationEvidence {
+  internal: {
+    status: string;
+    amount: number;
+    currency: string;
+  };
+  provider: {
+    status: string;
+    amount: number;
+    currency: string;
+  };
+  ledger: {
+    debit: number;
+    credit: number;
+    netSum: number;
+  };
+  matchedBy: MatchMethod | null;
+  detectedAt: string;
+}
+
+declare interface PaymentIncident {
+  id: string;
+  title: string;
+  severity: IncidentSeverity;
+  status: IncidentStatus;
+  provider: string;
+  affectedTransactionCount: number;
+  totalAffectedAmount: number;
+  mismatchTypes: string[];
+  reconciliationItemIds: string[];
+  detectedAt: string;
+  resolvedAt: string | null;
+  resolution: string | null;
+}
+
+declare interface ChaosScenario {
+  id: string;
+  name: string;
+  description: string;
+  severity: IncidentSeverity;
+  expectedBehavior: string;
+}
+
+declare interface ChaosTestResult {
+  scenarioId: string;
+  name: string;
+  passed: boolean;
+  expected: string;
+  actual: string;
+  duration: number;
+}
+
+declare interface ChaosTestReport {
+  scenariosRun: number;
+  passed: number;
+  failed: number;
+  results: ChaosTestResult[];
+  overallPassRate: number;
+  generatedAt: string;
+}

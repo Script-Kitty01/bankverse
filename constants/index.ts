@@ -24,6 +24,16 @@ export const sidebarLinks = [
     route: "/profile",
     label: "Profile",
   },
+  {
+    imgURL: "/icons/monitor.svg",
+    route: "/operations",
+    label: "Operations",
+  },
+  {
+    imgURL: "/icons/coins.svg",
+    route: "/chaos-lab",
+    label: "Chaos Lab",
+  },
 ];
 
 // good_user / good_password - Bank of America
