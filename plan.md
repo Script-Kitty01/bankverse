@@ -55,6 +55,7 @@ graph TD
 ### Phase 2: Optimistic Concurrency Control (OCC)
 
 - **Goal**: Prevent race conditions, double-settlements, and concurrent state corruption.
+- **Status**: 🟡 90% — OCC version checks are the sole concurrency guard; in-memory mutex removed from all OCC paths.
 - **Key Changes**:
   - Add `version: number` attribute to `PaymentTransaction` and `LedgerAccount` schemas.
   - Enforce conditional updates on state transitions:
@@ -63,9 +64,13 @@ graph TD
     SET state = 'SUCCESS', version = version + 1
     WHERE id = ? AND state = 'PROCESSING' AND version = ?
     ```
+  - **Removed `runWithEntityLock()` from all OCC-critical paths** (`updatePaymentTransactionState`, `updateAccountAggregates`, `recordTransaction`, `processPayment`). The version check is now the **sole** concurrency guard.
+  - Added **post-create idempotency check** in `recordTransaction()`: if two callers race past the pre-check, the second discovers the first's transaction and returns it.
+- **Known Limitation**: Appwrite's `getDocument() → check version → updateDocument()` is check-then-update, not atomic conditional UPDATE. In demo mode (single Node.js process), the synchronous check-and-update is effectively atomic. For true distributed OCC, a database with atomic conditional writes (PostgreSQL `UPDATE ... WHERE version = $expected`) is required. This is the Phase 2 completion gate.
 - **Invariants Verified**:
   - Concurrent operations on the same transaction result in **1 winner** and $N-1$ safe OCC conflicts/retries.
   - Zero double-charges or double-refunds under parallel requests.
+  - **Test 11**: 100 concurrent financial settlement attempts → 1 winner, 99 OCC conflicts, exactly 2 settlement entries, exactly 4 total ledger entries.
 
 ---
 

@@ -193,78 +193,83 @@ export async function updateAccountAggregates(
   accountId: string,
   expectedVersion?: number,
 ): Promise<LedgerAccount | null> {
-  return runWithEntityLock(`account:${accountId}`, async () => {
-    if (isDemoMode()) {
-      const account = demoStore.ledgerAccounts.find((a) => a.id === accountId);
-      if (!account) return null;
+  // NOTE: No in-memory mutex here. OCC version check is the sole guard.
+  // In demo mode, the synchronous check-and-update is atomic (JS single-threaded).
+  // In production, Appwrite's getDocument→check→updateDocument is check-then-update;
+  // true atomic OCC requires a DB with conditional UPDATE (e.g. PostgreSQL
+  // `UPDATE ... WHERE version = $expected`). This is a known limitation tracked
+  // in plan.md Phase 2.
 
-      if (expectedVersion !== undefined && account.version !== expectedVersion) {
-        throw new Error(
-          `OCC Conflict: Account ${accountId} version mismatch. Expected ${expectedVersion}, got ${account.version}`,
-        );
-      }
+  if (isDemoMode()) {
+    const account = demoStore.ledgerAccounts.find((a) => a.id === accountId);
+    if (!account) return null;
 
-      const entries = demoStore.ledgerEntries.filter(
-        (e) => e.accountId === accountId,
-      );
-      const totalDebits = entries
-        .filter((e) => e.entryType === "DEBIT")
-        .reduce((sum, e) => sum + e.amount, 0);
-      const totalCredits = entries
-        .filter((e) => e.entryType === "CREDIT")
-        .reduce((sum, e) => sum + e.amount, 0);
-
-      account.totalDebits = totalDebits;
-      account.totalCredits = totalCredits;
-      account.derivedBalance = totalCredits - totalDebits;
-      account.version = (account.version ?? 1) + 1;
-      account.updatedAt = new Date().toISOString();
-      return account;
-    }
-
-    const db = getDb();
-    const currentDoc = await db.getDocument(
-      DATABASE_ID,
-      LEDGER_ACCOUNTS_COLLECTION_ID,
-      accountId,
-    );
-    const currentVersion = currentDoc.version ?? 1;
-
-    if (expectedVersion !== undefined && currentVersion !== expectedVersion) {
+    if (expectedVersion !== undefined && account.version !== expectedVersion) {
       throw new Error(
-        `OCC Conflict: Account ${accountId} version mismatch. Expected ${expectedVersion}, got ${currentVersion}`,
+        `OCC Conflict: Account ${accountId} version mismatch. Expected ${expectedVersion}, got ${account.version}`,
       );
     }
 
-    const entries = await db.listDocuments(
-      DATABASE_ID,
-      LEDGER_ENTRIES_COLLECTION_ID,
-      [Query.equal("accountId", accountId), Query.limit(5000)],
+    const entries = demoStore.ledgerEntries.filter(
+      (e) => e.accountId === accountId,
     );
+    const totalDebits = entries
+      .filter((e) => e.entryType === "DEBIT")
+      .reduce((sum, e) => sum + e.amount, 0);
+    const totalCredits = entries
+      .filter((e) => e.entryType === "CREDIT")
+      .reduce((sum, e) => sum + e.amount, 0);
 
-    let totalDebits = 0;
-    let totalCredits = 0;
-    for (const doc of entries.documents) {
-      if (doc.entryType === "DEBIT") totalDebits += doc.amount;
-      else if (doc.entryType === "CREDIT") totalCredits += doc.amount;
-    }
+    account.totalDebits = totalDebits;
+    account.totalCredits = totalCredits;
+    account.derivedBalance = totalCredits - totalDebits;
+    account.version = (account.version ?? 1) + 1;
+    account.updatedAt = new Date().toISOString();
+    return account;
+  }
 
-    const nextVersion = currentVersion + 1;
+  const db = getDb();
+  const currentDoc = await db.getDocument(
+    DATABASE_ID,
+    LEDGER_ACCOUNTS_COLLECTION_ID,
+    accountId,
+  );
+  const currentVersion = currentDoc.version ?? 1;
 
-    const doc = await db.updateDocument(
-      DATABASE_ID,
-      LEDGER_ACCOUNTS_COLLECTION_ID,
-      accountId,
-      {
-        totalDebits,
-        totalCredits,
-        derivedBalance: totalCredits - totalDebits,
-        version: nextVersion,
-      },
+  if (expectedVersion !== undefined && currentVersion !== expectedVersion) {
+    throw new Error(
+      `OCC Conflict: Account ${accountId} version mismatch. Expected ${expectedVersion}, got ${currentVersion}`,
     );
+  }
 
-    return mapDocToAccount(doc);
-  });
+  const entries = await db.listDocuments(
+    DATABASE_ID,
+    LEDGER_ENTRIES_COLLECTION_ID,
+    [Query.equal("accountId", accountId), Query.limit(5000)],
+  );
+
+  let totalDebits = 0;
+  let totalCredits = 0;
+  for (const doc of entries.documents) {
+    if (doc.entryType === "DEBIT") totalDebits += doc.amount;
+    else if (doc.entryType === "CREDIT") totalCredits += doc.amount;
+  }
+
+  const nextVersion = currentVersion + 1;
+
+  const doc = await db.updateDocument(
+    DATABASE_ID,
+    LEDGER_ACCOUNTS_COLLECTION_ID,
+    accountId,
+    {
+      totalDebits,
+      totalCredits,
+      derivedBalance: totalCredits - totalDebits,
+      version: nextVersion,
+    },
+  );
+
+  return mapDocToAccount(doc);
 }
 
 // ─── Payment Transaction CRUD ───────────────────────────────────
@@ -464,65 +469,70 @@ export async function updatePaymentTransactionState(
   },
   expectedVersion?: number,
 ): Promise<PaymentTransaction | null> {
-  return runWithEntityLock(`tx:${id}`, async () => {
-    if (isDemoMode()) {
-      const tx = demoStore.paymentTransactions.find((t) => t.id === id);
-      if (!tx) return null;
+  // NOTE: No in-memory mutex here. OCC version check is the sole guard.
+  // In demo mode, the synchronous check-and-update is atomic (JS single-threaded).
+  // In production, Appwrite's getDocument→check→updateDocument is check-then-update;
+  // true atomic OCC requires a DB with conditional UPDATE (e.g. PostgreSQL
+  // `UPDATE ... WHERE version = $expected`). This is a known limitation tracked
+  // in plan.md Phase 2.
 
-      // OCC Check in Demo Mode
-      if (expectedVersion !== undefined && tx.version !== expectedVersion) {
-        throw new Error(
-          `OCC Conflict: Transaction ${id} version mismatch. Expected ${expectedVersion}, got ${tx.version}`,
-        );
-      }
+  if (isDemoMode()) {
+    const tx = demoStore.paymentTransactions.find((t) => t.id === id);
+    if (!tx) return null;
 
-      tx.paymentState = paymentState;
-      tx.settlementState = settlementState;
-      tx.version = (tx.version ?? 1) + 1;
-      if (extra?.providerPaymentId)
-        tx.providerPaymentId = extra.providerPaymentId;
-      if (extra?.providerRefundId) tx.providerRefundId = extra.providerRefundId;
-      if (extra?.retryCount !== undefined) tx.retryCount = extra.retryCount;
-      tx.updatedAt = new Date().toISOString();
-      return tx;
-    }
-
-    const db = getDb();
-    const currentDoc = await db.getDocument(
-      DATABASE_ID,
-      PAYMENT_TRANSACTIONS_COLLECTION_ID,
-      id,
-    );
-    const currentVersion = currentDoc.version ?? 1;
-
-    if (expectedVersion !== undefined && currentVersion !== expectedVersion) {
+    // OCC Check — sole concurrency guard (no mutex)
+    if (expectedVersion !== undefined && tx.version !== expectedVersion) {
       throw new Error(
-        `OCC Conflict: Transaction ${id} version mismatch. Expected ${expectedVersion}, got ${currentVersion}`,
+        `OCC Conflict: Transaction ${id} version mismatch. Expected ${expectedVersion}, got ${tx.version}`,
       );
     }
 
-    const nextVersion = currentVersion + 1;
-
-    const updateData: Record<string, unknown> = {
-      paymentState,
-      settlementState,
-      version: nextVersion,
-    };
+    tx.paymentState = paymentState;
+    tx.settlementState = settlementState;
+    tx.version = (tx.version ?? 1) + 1;
     if (extra?.providerPaymentId)
-      updateData.providerPaymentId = extra.providerPaymentId;
-    if (extra?.providerRefundId)
-      updateData.providerRefundId = extra.providerRefundId;
-    if (extra?.retryCount !== undefined) updateData.retryCount = extra.retryCount;
+      tx.providerPaymentId = extra.providerPaymentId;
+    if (extra?.providerRefundId) tx.providerRefundId = extra.providerRefundId;
+    if (extra?.retryCount !== undefined) tx.retryCount = extra.retryCount;
+    tx.updatedAt = new Date().toISOString();
+    return tx;
+  }
 
-    const doc = await db.updateDocument(
-      DATABASE_ID,
-      PAYMENT_TRANSACTIONS_COLLECTION_ID,
-      id,
-      updateData,
+  const db = getDb();
+  const currentDoc = await db.getDocument(
+    DATABASE_ID,
+    PAYMENT_TRANSACTIONS_COLLECTION_ID,
+    id,
+  );
+  const currentVersion = currentDoc.version ?? 1;
+
+  if (expectedVersion !== undefined && currentVersion !== expectedVersion) {
+    throw new Error(
+      `OCC Conflict: Transaction ${id} version mismatch. Expected ${expectedVersion}, got ${currentVersion}`,
     );
+  }
 
-    return mapDocToTransaction(doc);
-  });
+  const nextVersion = currentVersion + 1;
+
+  const updateData: Record<string, unknown> = {
+    paymentState,
+    settlementState,
+    version: nextVersion,
+  };
+  if (extra?.providerPaymentId)
+    updateData.providerPaymentId = extra.providerPaymentId;
+  if (extra?.providerRefundId)
+    updateData.providerRefundId = extra.providerRefundId;
+  if (extra?.retryCount !== undefined) updateData.retryCount = extra.retryCount;
+
+  const doc = await db.updateDocument(
+    DATABASE_ID,
+    PAYMENT_TRANSACTIONS_COLLECTION_ID,
+    id,
+    updateData,
+  );
+
+  return mapDocToTransaction(doc);
 }
 
 export async function getAllPaymentTransactions(

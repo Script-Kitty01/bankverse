@@ -18,7 +18,7 @@ const ENDPOINTS = [
   { name: "Phase 3: Internal/External Reconciliation", path: "/api/test-reconciliation", file: "./app/api/test-reconciliation/route.ts" },
   { name: "Phase 4: Fault Injection & Chaos Scenarios", path: "/api/test-chaos", file: "./app/api/test-chaos/route.ts" },
   { name: "Phase 5: Incident Detection & Operations", path: "/api/test-operations", file: "./app/api/test-operations/route.ts" },
-  { name: "E2E: DEBIT_WITHOUT_CREDIT Recovery Lifecycle", path: "/api/test-debit-without-credit", file: "./app/api/test-debit-without-credit/route.ts" },
+  { name: "E2E: DEBIT_WITHOUT_MERCHANT_SETTLEMENT Recovery Lifecycle", path: "/api/test-debit-without-credit", file: "./app/api/test-debit-without-credit/route.ts" },
 ];
 
 async function fetchJson(url) {

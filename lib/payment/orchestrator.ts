@@ -25,7 +25,6 @@ import {
   updatePaymentTransactionState,
   getPaymentTransactionById,
   getPaymentTransactionByIdempotencyKey,
-  runWithEntityLock,
 } from "@/lib/ledger/ledger.service";
 import { IdempotencyManager } from "@/lib/security/idempotency";
 import type { PaymentTransaction } from "@/lib/ledger/types";
@@ -114,54 +113,108 @@ export class PaymentOrchestrator {
   //   5. On UNKNOWN: query provider → resolve to SUCCESS or FAILED
 
   async processPayment(request: PaymentRequest): Promise<PaymentResult> {
+    // NOTE: No in-memory mutex. Idempotency is enforced by:
+    //   1. Pre-check: look for existing transaction by idempotencyKey
+    //   2. recordTransaction() has its own pre-check + post-create check
+    //   3. In production, a DB UNIQUE constraint on idempotencyKey makes this atomic.
+    //   The OCC version check on state transitions is the sole concurrency guard.
+
     const idempotencyKey =
       request.idempotencyKey ||
       `pay_${request.customerId}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
-    return runWithEntityLock(`idempotency:${idempotencyKey}`, async () => {
-      // Idempotency check
-      const existing =
-        await getPaymentTransactionByIdempotencyKey(idempotencyKey);
-      if (existing) {
-        return {
-          success: existing.paymentState === "SUCCESS",
-          transaction: existing,
-          orderId: existing.providerOrderId,
-          paymentId: existing.providerPaymentId,
-          error:
-            existing.paymentState !== "SUCCESS"
-              ? `Payment already exists in state: ${existing.paymentState}`
-              : undefined,
-        };
-      }
+    // Idempotency check
+    const existing =
+      await getPaymentTransactionByIdempotencyKey(idempotencyKey);
+    if (existing) {
+      return {
+        success: existing.paymentState === "SUCCESS",
+        transaction: existing,
+        orderId: existing.providerOrderId,
+        paymentId: existing.providerPaymentId,
+        error:
+          existing.paymentState !== "SUCCESS"
+            ? `Payment already exists in state: ${existing.paymentState}`
+            : undefined,
+      };
+    }
 
-      // Step 1: Create order via provider
-      const orderResult = await this.provider.createOrder({
+    // Step 1: Create order via provider
+    const orderResult = await this.provider.createOrder({
+      amount: request.amount,
+      currency: request.currency,
+      receipt: `rcpt_${idempotencyKey}`,
+      notes: {
+        customerId: request.customerId,
+        merchantId: request.merchantId,
+        method: request.method,
+      },
+    });
+
+    if (!orderResult.success || !orderResult.orderId) {
+      return {
+        success: false,
+        error: orderResult.error || "Order creation failed",
+      };
+    }
+
+    // Step 2: Verify & capture with retries (NO ledger yet — money hasn't moved)
+    const captureResult = await this.captureWithRetries(
+      orderResult.orderId,
+      request,
+    );
+
+    if (captureResult.success) {
+      // Step 3a: Provider confirmed capture → NOW record the ledger
+      const ledgerResult = await recordTransaction({
+        customerId: request.customerId,
+        merchantId: request.merchantId,
         amount: request.amount,
         currency: request.currency,
-        receipt: `rcpt_${idempotencyKey}`,
-        notes: {
-          customerId: request.customerId,
-          merchantId: request.merchantId,
-          method: request.method,
-        },
+        provider: this.provider.config.name,
+        providerReference: orderResult.orderId,
+        providerOrderId: orderResult.orderId,
+        idempotencyKey,
+        description: request.description || `Payment via ${request.method}`,
+        method: request.method,
       });
 
-      if (!orderResult.success || !orderResult.orderId) {
-        return {
-          success: false,
-          error: orderResult.error || "Order creation failed",
-        };
-      }
-
-      // Step 2: Verify & capture with retries (NO ledger yet — money hasn't moved)
-      const captureResult = await this.captureWithRetries(
-        orderResult.orderId,
-        request,
+      // Update with provider payment ID and version OCC guard
+      const updatedTx = await updatePaymentTransactionState(
+        ledgerResult.transaction.id,
+        PaymentStateMachine.transitionPayment("PROCESSING", "SUCCESS"),
+        "NOT_REQUIRED",
+        { providerPaymentId: captureResult.paymentId },
+        ledgerResult.transaction.version ?? 1,
       );
 
-      if (captureResult.success) {
-        // Step 3a: Provider confirmed capture → NOW record the ledger
+      // Step 3b: Settle from clearing to merchant
+      await settleToMerchant(ledgerResult.transaction.id);
+
+      const finalTx = updatedTx || ledgerResult.transaction;
+
+      // Cache result in Tier 1 (Redis) & Tier 2 (DB) Idempotency Layer
+      await IdempotencyManager.cacheResult(idempotencyKey, {
+        transaction: finalTx,
+        cachedAt: new Date().toISOString(),
+      });
+
+      return {
+        success: true,
+        transaction: finalTx,
+        orderId: orderResult.orderId,
+        paymentId: captureResult.paymentId,
+      };
+    }
+
+    if (captureResult.unknown) {
+      // Step 3b: UNKNOWN — query provider to resolve
+      const statusResult = await this.provider.getPaymentStatus({
+        orderId: orderResult.orderId,
+      });
+
+      if (statusResult.success && statusResult.status === "captured") {
+        // Provider says captured — record ledger and settle
         const ledgerResult = await recordTransaction({
           customerId: request.customerId,
           merchantId: request.merchantId,
@@ -175,91 +228,41 @@ export class PaymentOrchestrator {
           method: request.method,
         });
 
-        // Update with provider payment ID and version OCC guard
         const updatedTx = await updatePaymentTransactionState(
           ledgerResult.transaction.id,
           PaymentStateMachine.transitionPayment("PROCESSING", "SUCCESS"),
           "NOT_REQUIRED",
-          { providerPaymentId: captureResult.paymentId },
+          { providerPaymentId: statusResult.paymentId },
           ledgerResult.transaction.version ?? 1,
         );
 
-        // Step 3b: Settle from clearing to merchant
         await settleToMerchant(ledgerResult.transaction.id);
-
-        const finalTx = updatedTx || ledgerResult.transaction;
-
-        // Cache result in Tier 1 (Redis) & Tier 2 (DB) Idempotency Layer
-        await IdempotencyManager.cacheResult(idempotencyKey, {
-          transaction: finalTx,
-          cachedAt: new Date().toISOString(),
-        });
 
         return {
           success: true,
-          transaction: finalTx,
+          transaction: updatedTx || ledgerResult.transaction,
           orderId: orderResult.orderId,
-          paymentId: captureResult.paymentId,
+          paymentId: statusResult.paymentId,
         };
       }
 
-      if (captureResult.unknown) {
-        // Step 3b: UNKNOWN — query provider to resolve
-        const statusResult = await this.provider.getPaymentStatus({
-          orderId: orderResult.orderId,
-        });
-
-        if (statusResult.success && statusResult.status === "captured") {
-          // Provider says captured — record ledger and settle
-          const ledgerResult = await recordTransaction({
-            customerId: request.customerId,
-            merchantId: request.merchantId,
-            amount: request.amount,
-            currency: request.currency,
-            provider: this.provider.config.name,
-            providerReference: orderResult.orderId,
-            providerOrderId: orderResult.orderId,
-            idempotencyKey,
-            description: request.description || `Payment via ${request.method}`,
-            method: request.method,
-          });
-
-          const updatedTx = await updatePaymentTransactionState(
-            ledgerResult.transaction.id,
-            PaymentStateMachine.transitionPayment("PROCESSING", "SUCCESS"),
-            "NOT_REQUIRED",
-            { providerPaymentId: statusResult.paymentId },
-            ledgerResult.transaction.version ?? 1,
-          );
-
-          await settleToMerchant(ledgerResult.transaction.id);
-
-          return {
-            success: true,
-            transaction: updatedTx || ledgerResult.transaction,
-            orderId: orderResult.orderId,
-            paymentId: statusResult.paymentId,
-          };
-        }
-
-        // Provider says not captured — no ledger, mark FAILED
-        return {
-          success: false,
-          orderId: orderResult.orderId,
-          error:
-            captureResult.error || "Payment not captured (resolved to FAILED)",
-          retryCount: captureResult.retryCount,
-        };
-      }
-
-      // Step 3c: FAILED — no ledger entry (no money moved)
+      // Provider says not captured — no ledger, mark FAILED
       return {
         success: false,
         orderId: orderResult.orderId,
-        error: captureResult.error,
+        error:
+          captureResult.error || "Payment not captured (resolved to FAILED)",
         retryCount: captureResult.retryCount,
       };
-    });
+    }
+
+    // Step 3c: FAILED — no ledger entry (no money moved)
+    return {
+      success: false,
+      orderId: orderResult.orderId,
+      error: captureResult.error,
+      retryCount: captureResult.retryCount,
+    };
   }
 
   // ─── Capture with Retries ─────────────────────────────────────

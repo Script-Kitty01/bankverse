@@ -84,81 +84,97 @@ export async function getOrCreateClearingAccount(
 export async function recordTransaction(
   params: RecordTransactionParams,
 ): Promise<RecordTransactionResult> {
-  const { idempotencyKey } = params;
-  return runWithEntityLock(`recordTx:${idempotencyKey}`, async () => {
-    const {
-      customerId,
-      merchantId,
-      amount,
-      currency,
-      provider,
-      providerReference,
-      providerOrderId,
-      description = "Payment",
-      method,
-      bank,
-    } = params;
+  // NOTE: No in-memory mutex. Idempotency is enforced by:
+  //   1. Pre-check: look for existing transaction by idempotencyKey
+  //   2. Post-create check: if two callers race past the pre-check, the
+  //      second one discovers the first caller's transaction and returns it.
+  //   In production, a DB UNIQUE constraint on idempotencyKey makes this atomic.
 
-    // 1. Idempotency check
-    const existing = await getPaymentTransactionByIdempotencyKey(idempotencyKey);
-    if (existing) {
-      const entries = await getLedgerEntriesByTransaction(existing.id);
-      const debitEntry = entries.find((e) => e.entryType === "DEBIT")!;
-      const creditEntry = entries.find((e) => e.entryType === "CREDIT")!;
-      return { transaction: existing, debitEntry, creditEntry };
-    }
+  const {
+    customerId,
+    merchantId,
+    amount,
+    currency,
+    provider,
+    providerReference,
+    providerOrderId,
+    description = "Payment",
+    method,
+    bank,
+    idempotencyKey,
+  } = params;
 
-    // 2. Validate: SUM(debits) === SUM(credits)
-    validatePaymentEntries(amount, amount);
+  // 1. Pre-check: idempotency
+  const existing = await getPaymentTransactionByIdempotencyKey(idempotencyKey);
+  if (existing) {
+    const entries = await getLedgerEntriesByTransaction(existing.id);
+    const debitEntry = entries.find((e) => e.entryType === "DEBIT")!;
+    const creditEntry = entries.find((e) => e.entryType === "CREDIT")!;
+    return { transaction: existing, debitEntry, creditEntry };
+  }
 
-    // 3. Get or create ledger accounts
-    const customerAccount = await getOrCreateLedgerAccount(
-      customerId,
-      currency,
-      "CUSTOMER",
-    );
-    const clearingAccount = await getOrCreateClearingAccount(currency);
+  // 2. Validate: SUM(debits) === SUM(credits)
+  validatePaymentEntries(amount, amount);
 
-    // 4. Create payment transaction (PROCESSING — NOT yet settled to merchant)
-    const transaction = await createPaymentTransaction({
-      customerId,
-      merchantId,
-      amount,
-      currency,
-      provider,
-      providerReference,
-      providerOrderId,
-      idempotencyKey,
-      method,
-      bank,
-    });
+  // 3. Get or create ledger accounts
+  const customerAccount = await getOrCreateLedgerAccount(
+    customerId,
+    currency,
+    "CUSTOMER",
+  );
+  const clearingAccount = await getOrCreateClearingAccount(currency);
 
-    // 5. Create ledger entries: Customer → Clearing (append-only)
-    //    DEBIT the customer, CREDIT the clearing account
-    const debitEntry = await createLedgerEntry({
-      transactionId: transaction.id,
-      accountId: customerAccount.id,
-      entryType: "DEBIT",
-      amount,
-      currency,
-      description: `${description} — debit from ${customerId}`,
-    });
-
-    const creditEntry = await createLedgerEntry({
-      transactionId: transaction.id,
-      accountId: clearingAccount.id,
-      entryType: "CREDIT",
-      amount,
-      currency,
-      description: `${description} — credit to clearing (pending settlement to ${merchantId})`,
-    });
-
-    // 6. Update account aggregates with OCC expectedVersion
-    await updateAccountAggregates(customerAccount.id, customerAccount.version);
-    await updateAccountAggregates(clearingAccount.id, clearingAccount.version);
-
-    return { transaction, debitEntry, creditEntry };
+  // 4. Create payment transaction (PROCESSING — NOT yet settled to merchant)
+  const transaction = await createPaymentTransaction({
+    customerId,
+    merchantId,
+    amount,
+    currency,
+    provider,
+    providerReference,
+    providerOrderId,
+    idempotencyKey,
+    method,
+    bank,
   });
+
+  // 4b. Post-create idempotency check: if another concurrent call beat us
+  //     to creating a transaction with the same idempotencyKey, return theirs.
+  //     This handles the race where two callers both pass the pre-check.
+  const postCheck = await getPaymentTransactionByIdempotencyKey(idempotencyKey);
+  if (postCheck && postCheck.id !== transaction.id) {
+    // Another caller won the race — return their transaction
+    const entries = await getLedgerEntriesByTransaction(postCheck.id);
+    const debitEntry = entries.find((e) => e.entryType === "DEBIT")!;
+    const creditEntry = entries.find((e) => e.entryType === "CREDIT")!;
+    return { transaction: postCheck, debitEntry, creditEntry };
+  }
+
+  // 5. Create ledger entries: Customer → Clearing (append-only)
+  //    DEBIT the customer, CREDIT the clearing account
+  const debitEntry = await createLedgerEntry({
+    transactionId: transaction.id,
+    accountId: customerAccount.id,
+    entryType: "DEBIT",
+    amount,
+    currency,
+    description: `${description} — debit from ${customerId}`,
+  });
+
+  const creditEntry = await createLedgerEntry({
+    transactionId: transaction.id,
+    accountId: clearingAccount.id,
+    entryType: "CREDIT",
+    amount,
+    currency,
+    description: `${description} — credit to clearing (pending settlement to ${merchantId})`,
+  });
+
+  // 6. Update account aggregates with OCC expectedVersion
+  await updateAccountAggregates(customerAccount.id, customerAccount.version);
+  await updateAccountAggregates(clearingAccount.id, clearingAccount.version);
+
+  return { transaction, debitEntry, creditEntry };
 }
 
 /**

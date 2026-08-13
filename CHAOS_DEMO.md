@@ -10,18 +10,19 @@ This document describes the Chaos Lab and Operations Dashboard features added in
 
 Prove the system handles failure modes correctly through controlled chaos experiments.
 
-### 8 Chaos Scenarios
+### 9 Chaos Scenarios
 
-| #   | Scenario              | Severity | What It Tests                                    |
-| --- | --------------------- | -------- | ------------------------------------------------ |
-| 1   | Provider Timeout      | HIGH     | Orchestrator handles provider failure gracefully |
-| 2   | Amount Mismatch       | HIGH     | Reconciliation detects amount discrepancies      |
-| 3   | Duplicate Charge      | CRITICAL | Duplicate detection and refund path              |
-| 4   | Missing Credit        | CRITICAL | Ledger integrity (DEBIT_WITHOUT_CREDIT)          |
-| 5   | Webhook Out of Order  | MEDIUM   | State machine rejects invalid transitions        |
-| 6   | Provider Down         | HIGH     | Health check and graceful degradation            |
-| 7   | Slow Reconciliation   | MEDIUM   | Bulk reconciliation performance                  |
-| 8   | Refund Race Condition | MEDIUM   | Settlement state transitions during refund       |
+| #   | Scenario                     | Severity | What It Tests                                    |
+| --- | ---------------------------- | -------- | ------------------------------------------------ |
+| 1   | Provider Timeout             | HIGH     | Orchestrator handles provider failure gracefully |
+| 2   | Amount Mismatch              | HIGH     | Reconciliation detects amount discrepancies      |
+| 3   | Duplicate Charge             | CRITICAL | Duplicate detection and refund path              |
+| 4   | Missing Credit               | CRITICAL | Ledger integrity (DEBIT_WITHOUT_CREDIT)          |
+| 5   | Webhook Out of Order         | MEDIUM   | State machine rejects invalid transitions        |
+| 6   | Provider Down                | HIGH     | Health check and graceful degradation            |
+| 7   | Slow Reconciliation          | MEDIUM   | Bulk reconciliation performance                  |
+| 8   | Worker Crash After DB Commit | CRITICAL | Outbox event recovery without duplicate entries  |
+| 9   | Refund Race Condition        | MEDIUM   | Settlement state transitions during refund       |
 
 ### API Endpoints
 
@@ -29,7 +30,7 @@ Prove the system handles failure modes correctly through controlled chaos experi
 - `GET /api/chaos?action=report` — Get latest test report
 - `POST /api/chaos` — Run a scenario (`{ scenarioId, action: "run" }`)
 - `POST /api/chaos` — Run all (`{ action: "run-all" }`)
-- `GET /api/test-chaos` — Automated verification (all 8 scenarios)
+- `GET /api/test-chaos` — Automated verification (all 9 scenarios)
 
 ### UI
 
@@ -63,7 +64,7 @@ Provide real-time operational visibility: KPIs, incident detection, provider hea
 
 - `GET /api/operations` — Full operations snapshot
 - `POST /api/operations` — Resolve/dismiss incidents (`{ action: "resolve-incident", incidentId }`)
-- `GET /api/test-operations` — Automated verification (6 tests)
+- `GET /api/test-operations` — Automated verification (7 tests)
 
 ### UI
 
@@ -80,20 +81,21 @@ New sidebar links added:
 
 All phases tested and passing:
 
-| Phase                   | Tests     | Status |
-| ----------------------- | --------- | ------ |
-| Phase 1: Ledger         | 7/7       | ✅     |
-| Phase 2: Orchestrator   | 9/9       | ✅     |
-| Phase 3: Reconciliation | 7/7       | ✅     |
-| Phase 4: Chaos Lab      | 8/8       | ✅     |
-| Phase 5: Operations     | 6/6       | ✅     |
-| **Total**               | **37/37** | **✅** |
+| Phase                         | Tests     | Status |
+| ----------------------------- | --------- | ------ |
+| Phase 1: Ledger               | 7/7       | ✅     |
+| Phase 2: Orchestrator         | 12/12     | ✅     |
+| Phase 3: Reconciliation       | 7/7       | ✅     |
+| Phase 4: Chaos Lab            | 9/9       | ✅     |
+| Phase 5: Operations           | 7/7       | ✅     |
+| E2E: DEBIT_WITHOUT_SETTLEMENT | 1/1       | ✅     |
+| **Total**                     | **43/43** | **✅** |
 
 ## Files Created
 
 ### Phase 4
 
-- `lib/chaos/scenarios.ts` — 8 chaos scenario definitions
+- `lib/chaos/scenarios.ts` — 9 chaos scenario definitions
 - `lib/chaos/injector.ts` — Chaos injection engine
 - `app/api/chaos/route.ts` — Chaos API
 - `app/api/webhooks/razorpay/route.ts` — Razorpay webhook handler

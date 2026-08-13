@@ -39,13 +39,15 @@
 
 Payment failures cost businesses **2-5% of revenue** in lost customers, manual reconciliation, and compliance penalties. Most banking apps treat failures as exceptions. BankVerse treats them as **expected events** and builds the infrastructure to detect, contain, and recover from them automatically using a three-legged clearing model and optimistic concurrency control.
 
-| Problem                                                | BankVerse Solution                                                                                                                                                        |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| "Where did the money go?"                              | **Double-entry ledger** — every paisa is accounted for. SUM(debits) === SUM(credits) enforced at transaction time.                                                        |
-| "The provider says success but we show failure"        | **Automated reconciliation** — internal ledger vs provider records, with structured mismatch evidence.                                                                    |
-| "1,200 failed transactions, 1,200 alerts"              | **Incident correlation** — groups related failures by provider, type, and time window into single actionable incidents.                                                   |
-| "How do we know the system actually handles failures?" | **Chaos engineering** — 8 failure scenarios (timeout, mismatch, duplicate, missing credit, webhook disorder, provider down, bulk mismatch, race condition) run on demand. |
-| "How do we prove to auditors?"                         | **Append-only ledger** — entries are never modified or deleted. Reversals create new entries. Full audit trail.                                                           |
+| Problem                                                | BankVerse Solution                                                                                                                                                                   |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| "Where did the money go?"                              | **Double-entry ledger** — every paisa is accounted for. SUM(debits) === SUM(credits) enforced at transaction time.                                                                   |
+| "Two customers pay in the same millisecond"            | **Optimistic Concurrency Control** — versioned entities guarantee 1 winner and N-1 safe conflicts. No double-settlements.                                                            |
+| "The user tapped pay twice (and retried)"              | **Two-tiered idempotency** — Redis lock/cache + DB unique constraint produce exactly 1 charge and identical safe responses across retries.                                           |
+| "The provider says success but we show failure"        | **Automated reconciliation** — internal ledger vs provider records, with structured mismatch evidence.                                                                               |
+| "1,200 failed transactions, 1,200 alerts"              | **Incident correlation** — groups related failures by provider, type, and time window into single actionable incidents.                                                              |
+| "How do we know the system actually handles failures?" | **Chaos engineering** — 9 failure scenarios (timeout, mismatch, duplicate, missing credit, webhook disorder, provider down, bulk mismatch, worker crash, refund race) run on demand. |
+| "How do we prove to auditors?"                         | **Append-only ledger** — entries are never modified or deleted. Reversals create new entries. Full audit trail.                                                                      |
 
 ---
 
@@ -58,8 +60,15 @@ graph TB
     end
 
     subgraph Payment["💳 Payment Layer"]
-        ORCH["Payment Orchestrator<br/>Retry · Idempotency · State Machine"]
+        ORCH["Payment Orchestrator<br/>Retry · Idempotency · OCC State Machine"]
         PSP["Payment Providers<br/>Razorpay · Dwolla · Plaid"]
+    end
+
+    subgraph Consistency["🛡️ Consistency Guarantees"]
+        IDEM["Two-Tiered Idempotency<br/>Tier 1: Redis lock + cache<br/>Tier 2: DB unique constraint"]
+        OCC["Optimistic Concurrency Control<br/>Entity versioning<br/>1 winner · N-1 conflicts"]
+        OUTBOX["Transactional Outbox<br/>Atomic payment + ledger + events"]
+        CLEARING["Clearing Suspense Account<br/>Merchant never credited<br/>before capture confirmed"]
     end
 
     subgraph Ledger["📒 Double-Entry Ledger"]
@@ -80,16 +89,21 @@ graph TB
     end
 
     subgraph Chaos["💥 Chaos Lab"]
-        SCENARIOS["8 Failure Scenarios<br/>INJECT → OBSERVE → VERIFY → PASS/FAIL"]
+        SCENARIOS["9 Failure Scenarios<br/>INJECT → OBSERVE → VERIFY → PASS/FAIL"]
     end
 
     UI --> ORCH
+    ORCH --> IDEM
+    IDEM --> OUTBOX
+    OUTBOX --> OCC
+    OCC --> CLEARING
     ORCH --> PSP
     ORCH --> VAL
     VAL --> ENTRIES
     ENTRIES --> BAL
     ENTRIES --> MATCHER
     PSP --> MATCHER
+    CLEARING --> MATCHER
     MATCHER --> ENGINE
     ENGINE --> DETECT
     DETECT --> CORR
@@ -124,6 +138,16 @@ sequenceDiagram
         R->>I: Detect DEBIT_WITHOUT_MERCHANT_SETTLEMENT
     end
 ```
+
+### Optimistic Concurrency & Two-Tiered Idempotency Guarantees
+
+Beyond the clearing model, BankVerse keeps financial state safe under concurrency and retries:
+
+| Mechanism                  | How it works                                                                                                                                                 | Guarantee                                                                                                                                         |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **OCC entity versioning**  | `PaymentTransaction` and `LedgerAccount` carry a `version`. Every state transition and settlement is a conditional update (`WHERE id = ? AND version = ?`).  | Exactly **1 winner** and **N-1** safe OCC conflicts — no double-settlements or double-refunds, verified by a 100-concurrent settlement race test. |
+| **Two-tiered idempotency** | **Tier 1** — Redis-style lock + result cache for fast duplicate rejection. **Tier 2** — DB unique constraint on `idempotencyKey` as the authoritative guard. | N identical requests produce **1 financial movement** and N identical safe responses.                                                             |
+| **Transactional outbox**   | Payment state, ledger entries, and outbox events persist atomically in a single transaction; an async worker delivers events at-least-once.                  | No lost events and no duplicate ledger movements across worker crashes — events are recovered on restart.                                         |
 
 ---
 
@@ -189,11 +213,11 @@ npm test
 
 # Or via HTTP endpoints when server is running
 curl http://localhost:3000/api/test-ledger          # Phase 1: 7 tests
-curl http://localhost:3000/api/test-payment         # Phase 2: 12 tests
+curl http://localhost:3000/api/test-payment         # Phase 2: 12 tests (incl. OCC settlement race)
 curl http://localhost:3000/api/test-reconciliation  # Phase 3: 7 tests
 curl http://localhost:3000/api/test-chaos           # Phase 4: 9 tests
 curl http://localhost:3000/api/test-operations      # Phase 5: 7 tests
-curl http://localhost:3000/api/test-debit-without-credit  # E2E: DEBIT_WITHOUT_CREDIT
+curl http://localhost:3000/api/test-debit-without-credit  # E2E: DEBIT_WITHOUT_MERCHANT_SETTLEMENT
 ```
 
 ### 5. Docker (Production)
@@ -208,15 +232,18 @@ docker compose up --build
 
 ### 🛡️ Payment Reliability (Core)
 
-| Feature                          | Description                                                                                                                                                      |
-| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Double-Entry Ledger**          | Append-only entries. SUM(debits) === SUM(credits) enforced. Reversals create new entries, never modify originals.                                                |
-| **Automated Reconciliation**     | Match internal ledger against provider records. Structured mismatch evidence (AMOUNT_MISMATCH, MISSING_INTERNAL, DEBIT_WITHOUT_MERCHANT_SETTLEMENT, DUPLICATE).               |
-| **Dual-Dimension State Machine** | PaymentState (CREATED→PROCESSING→SUCCESS/FAILED) + SettlementState (NOT_REQUIRED→PENDING_RECONCILIATION→RECONCILING→RESOLVED/REFUNDED).                          |
-| **Idempotency**                  | Duplicate payment requests return the same transaction. No double-charges.                                                                                       |
-| **Chaos Engineering**            | 8 failure scenarios: provider timeout, amount mismatch, duplicate charge, missing credit, webhook disorder, provider down, bulk mismatch, refund race condition. |
-| **Incident Correlation**         | Groups related failures by provider + mismatch type + 5-min time window. 1,200 broken transactions = 1 incident, not 1,200.                                      |
-| **Operations Dashboard**         | Real-time KPIs: success rate, total volume, active incidents, reconciliation match rate, provider health.                                                        |
+| Feature                          | Description                                                                                                                                                                                 |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Double-Entry Ledger**          | Append-only entries. SUM(debits) === SUM(credits) enforced. Reversals create new entries, never modify originals.                                                                           |
+| **Clearing Account Lifecycle**   | Three-legged booking (Customer → Clearing → Merchant). Merchant is never credited until provider capture is confirmed.                                                                      |
+| **Optimistic Concurrency (OCC)** | Entity versioning on transactions & accounts. Conditional state transitions give 1 winner + N-1 safe conflicts (100-concurrent settlement race test).                                       |
+| **Two-Tiered Idempotency**       | Tier 1 Redis lock + result cache; Tier 2 DB unique constraint on `idempotencyKey`. N duplicates → 1 movement, N identical safe responses.                                                   |
+| **Transactional Outbox**         | Payment state + ledger entries + outbox events commit atomically; async worker delivers at-least-once across crashes.                                                                       |
+| **Automated Reconciliation**     | Match internal ledger against provider records. Structured mismatch evidence (AMOUNT_MISMATCH, MISSING_INTERNAL, DEBIT_WITHOUT_MERCHANT_SETTLEMENT, DUPLICATE).                             |
+| **Dual-Dimension State Machine** | PaymentState (CREATED→PROCESSING→SUCCESS/FAILED) + SettlementState (NOT_REQUIRED→PENDING_RECONCILIATION→RECONCILING→RESOLVED/REFUNDED).                                                     |
+| **Chaos Engineering**            | 9 failure scenarios: provider timeout, amount mismatch, duplicate charge, missing credit, webhook disorder, provider down, bulk mismatch, worker crash after commit, refund race condition. |
+| **Incident Correlation**         | Groups related failures by provider + mismatch type + 5-min time window. 1,200 broken transactions = 1 incident, not 1,200.                                                                 |
+| **Operations Dashboard**         | Real-time KPIs: success rate, total volume, active incidents, reconciliation match rate, provider health.                                                                                   |
 
 ### 🔐 Authentication & Security
 
@@ -261,24 +288,31 @@ bankverse/
 │   │   └── sign-up/page.tsx
 │   ├── (root)/                        # 🔒 Protected routes
 │   │   ├── page.tsx                   # Dashboard
+│   │   ├── chaos-lab/                 # 💥 Chaos engineering lab UI
 │   │   ├── my-banks/                  # Connected accounts
+│   │   ├── operations/                # 🚨 Operations dashboard UI
 │   │   ├── payment-transfer/          # ACH + Razorpay/UPI
 │   │   ├── transaction-history/       # Full transaction log
 │   │   └── profile/                   # User settings
 │   └── api/
+│       ├── chaos/route.ts             # Chaos API
 │       ├── health/route.ts
+│       ├── operations/route.ts        # Operations API
+│       ├── reconciliation/route.ts    # Reconciliation API
+│       ├── test-chaos/route.ts        # Phase 4 tests
+│       ├── test-debit-without-credit/ # E2E test
 │       ├── test-ledger/route.ts       # Phase 1 tests
+│       ├── test-operations/route.ts   # Phase 5 tests
 │       ├── test-payment/route.ts      # Phase 2 tests
 │       ├── test-reconciliation/route.ts # Phase 3 tests
-│       ├── test-chaos/route.ts        # Phase 4 tests
-│       ├── test-operations/route.ts   # Phase 5 tests
-│       └── test-debit-without-credit/ # E2E test
+│       └── webhooks/razorpay/route.ts # Razorpay webhooks
 ├── components/
 │   ├── ui/                            # shadcn/ui primitives
 │   └── ...                            # UI components
 ├── lib/
 │   ├── ledger/                        # 📒 Double-entry ledger
 │   │   ├── ledger.service.ts          # Orchestration (public API)
+│   │   ├── outbox.ts                  # Transactional outbox
 │   │   ├── repository.ts              # Data access (demo + Appwrite)
 │   │   ├── validation.ts              # Invariants (double-entry)
 │   │   ├── balance.ts                 # Derived balance computation
@@ -286,6 +320,8 @@ bankverse/
 │   ├── payment/                       # 💳 Payment orchestration
 │   │   ├── orchestrator.ts            # Full lifecycle with retries
 │   │   ├── state-machine.ts           # Dual-dimension FSM
+│   │   ├── provider.interface.ts      # Provider interface
+│   │   ├── razorpay.provider.ts       # Razorpay provider
 │   │   └── mock.provider.ts           # Test provider
 │   ├── reconciliation/                # 🔍 Automated reconciliation
 │   │   ├── engine.ts                  # Reconciliation runner
@@ -295,9 +331,10 @@ bankverse/
 │   │   ├── detector.ts                # Incident detection
 │   │   └── correlator.ts              # Incident grouping
 │   ├── chaos/                         # 💥 Chaos engineering
-│   │   ├── scenarios.ts               # 8 failure scenarios
+│   │   ├── scenarios.ts               # 9 failure scenarios
 │   │   └── injector.ts                # Chaos injection engine
 │   ├── security/                      # 🛡️ Security
+│   │   ├── idempotency.ts             # Idempotency lock & cache
 │   │   ├── rate-limit.ts
 │   │   ├── csrf.ts
 │   │   ├── sanitize.ts
@@ -315,14 +352,14 @@ bankverse/
 
 BankVerse ships with **43 automated verification checks** across 6 phases (runnable via `npm test`):
 
-| Phase | Endpoint                         | Tests | What it verifies                                                                                                                           |
-| ----- | -------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1     | `/api/test-ledger`               | 7     | Double-entry recording, idempotency, reversals, derived balances, integrity                                                                |
-| 2     | `/api/test-payment`              | 12    | State machine transitions, mock provider, full payment flow, refunds, OCC state race, OCC processPayment race, OCC settlement race       |
-| 3     | `/api/test-reconciliation`       | 7     | Internal/external matching, mismatch detection, evidence generation                                                                        |
+| Phase | Endpoint                         | Tests | What it verifies                                                                                                                                 |
+| ----- | -------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1     | `/api/test-ledger`               | 7     | Double-entry recording, idempotency, reversals, derived balances, integrity                                                                      |
+| 2     | `/api/test-payment`              | 12    | State machine transitions, mock provider, full payment flow, refunds, OCC state race, OCC processPayment race, OCC settlement race               |
+| 3     | `/api/test-reconciliation`       | 7     | Internal/external matching, mismatch detection, evidence generation                                                                              |
 | 4     | `/api/test-chaos`                | 9     | Provider timeout, amount mismatch, duplicate charge, missing credit, webhook disorder, provider down, bulk mismatch, crash recovery, refund race |
-| 5     | `/api/test-operations`           | 7     | Incident detection, reconciliation incidents, operations snapshot, incident lifecycle, API endpoint, provider health, incident correlation |
-| E2E   | `/api/test-debit-without-credit` | 1     | Full DEBIT_WITHOUT_MERCHANT_SETTLEMENT lifecycle: payment → detection → incident → recovery → resolution                                                |
+| 5     | `/api/test-operations`           | 7     | Incident detection, reconciliation incidents, operations snapshot, incident lifecycle, API endpoint, provider health, incident correlation       |
+| E2E   | `/api/test-debit-without-credit` | 1     | Full DEBIT_WITHOUT_MERCHANT_SETTLEMENT lifecycle: payment → detection → incident → recovery → resolution                                         |
 
 ---
 
@@ -363,9 +400,13 @@ BankVerse ships with **43 automated verification checks** across 6 phases (runna
 ## 🎯 Roadmap
 
 - [x] Double-entry ledger with append-only entries
+- [x] Three-legged clearing model (Customer → Clearing → Merchant)
+- [x] Optimistic Concurrency Control (OCC) entity versioning
+- [x] Two-tiered idempotency (Redis + DB)
+- [x] Transactional outbox + async event worker
 - [x] Payment orchestrator with state machine
 - [x] Automated reconciliation engine
-- [x] Chaos engineering (8 failure scenarios)
+- [x] Chaos engineering (9 failure scenarios)
 - [x] Incident detection + correlation
 - [x] Operations dashboard
 - [x] DEBIT_WITHOUT_MERCHANT_SETTLEMENT end-to-end recovery
