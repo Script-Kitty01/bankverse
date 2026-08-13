@@ -153,8 +153,10 @@ export async function GET() {
 
   // Test 5: Operations API endpoint
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
-    const res = await fetch(`${baseUrl}/api/operations`);
+    const { GET: getOperationsEndpoint } = await import(
+      "@/app/api/operations/route"
+    );
+    const res = await getOperationsEndpoint();
     const data = await res.json();
 
     results["operations-api"] = {

@@ -29,10 +29,12 @@ import {
   createPaymentTransaction,
   getPaymentTransactionById,
   getPaymentTransactionByIdempotencyKey,
+  updatePaymentTransactionState,
   createLedgerEntry,
   getLedgerEntriesByTransaction,
   getLedgerEntriesByAccount,
   getAllLedgerEntries,
+  runWithEntityLock,
 } from "./repository";
 import {
   validatePaymentEntries,
@@ -82,79 +84,81 @@ export async function getOrCreateClearingAccount(
 export async function recordTransaction(
   params: RecordTransactionParams,
 ): Promise<RecordTransactionResult> {
-  const {
-    customerId,
-    merchantId,
-    amount,
-    currency,
-    provider,
-    providerReference,
-    providerOrderId,
-    idempotencyKey,
-    description = "Payment",
-    method,
-    bank,
-  } = params;
+  const { idempotencyKey } = params;
+  return runWithEntityLock(`recordTx:${idempotencyKey}`, async () => {
+    const {
+      customerId,
+      merchantId,
+      amount,
+      currency,
+      provider,
+      providerReference,
+      providerOrderId,
+      description = "Payment",
+      method,
+      bank,
+    } = params;
 
-  // 1. Idempotency check
-  const existing = await getPaymentTransactionByIdempotencyKey(idempotencyKey);
-  if (existing) {
-    const entries = await getLedgerEntriesByTransaction(existing.id);
-    const debitEntry = entries.find((e) => e.entryType === "DEBIT")!;
-    const creditEntry = entries.find((e) => e.entryType === "CREDIT")!;
-    return { transaction: existing, debitEntry, creditEntry };
-  }
+    // 1. Idempotency check
+    const existing = await getPaymentTransactionByIdempotencyKey(idempotencyKey);
+    if (existing) {
+      const entries = await getLedgerEntriesByTransaction(existing.id);
+      const debitEntry = entries.find((e) => e.entryType === "DEBIT")!;
+      const creditEntry = entries.find((e) => e.entryType === "CREDIT")!;
+      return { transaction: existing, debitEntry, creditEntry };
+    }
 
-  // 2. Validate: SUM(debits) === SUM(credits)
-  validatePaymentEntries(amount, amount);
+    // 2. Validate: SUM(debits) === SUM(credits)
+    validatePaymentEntries(amount, amount);
 
-  // 3. Get or create ledger accounts
-  const customerAccount = await getOrCreateLedgerAccount(
-    customerId,
-    currency,
-    "CUSTOMER",
-  );
-  const clearingAccount = await getOrCreateClearingAccount(currency);
+    // 3. Get or create ledger accounts
+    const customerAccount = await getOrCreateLedgerAccount(
+      customerId,
+      currency,
+      "CUSTOMER",
+    );
+    const clearingAccount = await getOrCreateClearingAccount(currency);
 
-  // 4. Create payment transaction (PROCESSING — NOT yet settled to merchant)
-  const transaction = await createPaymentTransaction({
-    customerId,
-    merchantId,
-    amount,
-    currency,
-    provider,
-    providerReference,
-    providerOrderId,
-    idempotencyKey,
-    method,
-    bank,
+    // 4. Create payment transaction (PROCESSING — NOT yet settled to merchant)
+    const transaction = await createPaymentTransaction({
+      customerId,
+      merchantId,
+      amount,
+      currency,
+      provider,
+      providerReference,
+      providerOrderId,
+      idempotencyKey,
+      method,
+      bank,
+    });
+
+    // 5. Create ledger entries: Customer → Clearing (append-only)
+    //    DEBIT the customer, CREDIT the clearing account
+    const debitEntry = await createLedgerEntry({
+      transactionId: transaction.id,
+      accountId: customerAccount.id,
+      entryType: "DEBIT",
+      amount,
+      currency,
+      description: `${description} — debit from ${customerId}`,
+    });
+
+    const creditEntry = await createLedgerEntry({
+      transactionId: transaction.id,
+      accountId: clearingAccount.id,
+      entryType: "CREDIT",
+      amount,
+      currency,
+      description: `${description} — credit to clearing (pending settlement to ${merchantId})`,
+    });
+
+    // 6. Update account aggregates with OCC expectedVersion
+    await updateAccountAggregates(customerAccount.id, customerAccount.version);
+    await updateAccountAggregates(clearingAccount.id, clearingAccount.version);
+
+    return { transaction, debitEntry, creditEntry };
   });
-
-  // 5. Create ledger entries: Customer → Clearing (append-only)
-  //    DEBIT the customer, CREDIT the clearing account
-  const debitEntry = await createLedgerEntry({
-    transactionId: transaction.id,
-    accountId: customerAccount.id,
-    entryType: "DEBIT",
-    amount,
-    currency,
-    description: `${description} — debit from ${customerId}`,
-  });
-
-  const creditEntry = await createLedgerEntry({
-    transactionId: transaction.id,
-    accountId: clearingAccount.id,
-    entryType: "CREDIT",
-    amount,
-    currency,
-    description: `${description} — credit to clearing (pending settlement to ${merchantId})`,
-  });
-
-  // 6. Update account aggregates with OCC expectedVersion
-  await updateAccountAggregates(customerAccount.id, customerAccount.version);
-  await updateAccountAggregates(clearingAccount.id, clearingAccount.version);
-
-  return { transaction, debitEntry, creditEntry };
 }
 
 /**
@@ -164,11 +168,19 @@ export async function recordTransaction(
  */
 export async function settleToMerchant(
   transactionId: string,
+  expectedVersion?: number,
 ): Promise<{ debitEntry: LedgerEntry; creditEntry: LedgerEntry }> {
   const transaction = await getPaymentTransactionById(transactionId);
   if (!transaction) throw new Error(`Transaction ${transactionId} not found`);
 
-  // Idempotency: check if settlement entries already exist
+  // OCC Check
+  if (expectedVersion !== undefined && transaction.version !== expectedVersion) {
+    throw new Error(
+      `OCC Conflict: Settlement version mismatch for transaction ${transactionId}. Expected ${expectedVersion}, got ${transaction.version}`,
+    );
+  }
+
+  // Idempotency check: if settlement entries already exist
   const allEntries = await getLedgerEntriesByTransaction(transactionId);
   const existingSettlement = allEntries.find((e) =>
     e.description.startsWith("SETTLEMENT:"),
@@ -182,6 +194,21 @@ export async function settleToMerchant(
         e.entryType === "CREDIT" && e.description.startsWith("SETTLEMENT:"),
     )!;
     return { debitEntry: settlementDebit, creditEntry: settlementCredit };
+  }
+
+  // Atomically update state & version via OCC
+  const updatedTx = await updatePaymentTransactionState(
+    transactionId,
+    transaction.paymentState,
+    "RESOLVED",
+    {},
+    expectedVersion ?? transaction.version,
+  );
+
+  if (!updatedTx) {
+    throw new Error(
+      `Failed to update settlement state for transaction ${transactionId}`,
+    );
   }
 
   const clearingAccount = await getOrCreateClearingAccount(
@@ -423,6 +450,7 @@ export async function verifyLedgerIntegrity(): Promise<{
 
 // ─── Re-exports for backward compatibility ──────────────────────
 
+export { runWithEntityLock } from "./repository";
 export { getPaymentTransactionById } from "./repository";
 export { getPaymentTransactionByIdempotencyKey } from "./repository";
 export { getPaymentTransactionByProviderOrderId } from "./repository";

@@ -181,14 +181,17 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-### 4. Run the Test Suite
+### 4. Run the Verification Test Suite
 
 ```bash
-# All 39 tests across 6 phases
+# Run all 43 automated verification checks
+npm test
+
+# Or via HTTP endpoints when server is running
 curl http://localhost:3000/api/test-ledger          # Phase 1: 7 tests
-curl http://localhost:3000/api/test-payment         # Phase 2: 10 tests
+curl http://localhost:3000/api/test-payment         # Phase 2: 12 tests
 curl http://localhost:3000/api/test-reconciliation  # Phase 3: 7 tests
-curl http://localhost:3000/api/test-chaos           # Phase 4: 8 tests
+curl http://localhost:3000/api/test-chaos           # Phase 4: 9 tests
 curl http://localhost:3000/api/test-operations      # Phase 5: 7 tests
 curl http://localhost:3000/api/test-debit-without-credit  # E2E: DEBIT_WITHOUT_CREDIT
 ```
@@ -208,7 +211,7 @@ docker compose up --build
 | Feature                          | Description                                                                                                                                                      |
 | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Double-Entry Ledger**          | Append-only entries. SUM(debits) === SUM(credits) enforced. Reversals create new entries, never modify originals.                                                |
-| **Automated Reconciliation**     | Match internal ledger against provider records. Structured mismatch evidence (AMOUNT_MISMATCH, MISSING_INTERNAL, DEBIT_WITHOUT_CREDIT, DUPLICATE).               |
+| **Automated Reconciliation**     | Match internal ledger against provider records. Structured mismatch evidence (AMOUNT_MISMATCH, MISSING_INTERNAL, DEBIT_WITHOUT_MERCHANT_SETTLEMENT, DUPLICATE).               |
 | **Dual-Dimension State Machine** | PaymentState (CREATED→PROCESSING→SUCCESS/FAILED) + SettlementState (NOT_REQUIRED→PENDING_RECONCILIATION→RECONCILING→RESOLVED/REFUNDED).                          |
 | **Idempotency**                  | Duplicate payment requests return the same transaction. No double-charges.                                                                                       |
 | **Chaos Engineering**            | 8 failure scenarios: provider timeout, amount mismatch, duplicate charge, missing credit, webhook disorder, provider down, bulk mismatch, refund race condition. |
@@ -310,16 +313,16 @@ bankverse/
 
 ## 🧪 Test Suite
 
-BankVerse ships with **39 automated tests** across 6 phases:
+BankVerse ships with **43 automated verification checks** across 6 phases (runnable via `npm test`):
 
 | Phase | Endpoint                         | Tests | What it verifies                                                                                                                           |
 | ----- | -------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | 1     | `/api/test-ledger`               | 7     | Double-entry recording, idempotency, reversals, derived balances, integrity                                                                |
-| 2     | `/api/test-payment`              | 10    | State machine transitions, mock provider, full payment flow, refunds, 100 concurrent OCC race test                                        |
+| 2     | `/api/test-payment`              | 12    | State machine transitions, mock provider, full payment flow, refunds, OCC state race, OCC processPayment race, OCC settlement race       |
 | 3     | `/api/test-reconciliation`       | 7     | Internal/external matching, mismatch detection, evidence generation                                                                        |
-| 4     | `/api/test-chaos`                | 8     | Provider timeout, amount mismatch, duplicate charge, missing credit, webhook disorder, provider down, bulk mismatch, refund race condition |
+| 4     | `/api/test-chaos`                | 9     | Provider timeout, amount mismatch, duplicate charge, missing credit, webhook disorder, provider down, bulk mismatch, crash recovery, refund race |
 | 5     | `/api/test-operations`           | 7     | Incident detection, reconciliation incidents, operations snapshot, incident lifecycle, API endpoint, provider health, incident correlation |
-| E2E   | `/api/test-debit-without-credit` | 1     | Full DEBIT_WITHOUT_CREDIT lifecycle: payment → detection → incident → recovery → resolution                                                |
+| E2E   | `/api/test-debit-without-credit` | 1     | Full DEBIT_WITHOUT_MERCHANT_SETTLEMENT lifecycle: payment → detection → incident → recovery → resolution                                                |
 
 ---
 
@@ -365,7 +368,7 @@ BankVerse ships with **39 automated tests** across 6 phases:
 - [x] Chaos engineering (8 failure scenarios)
 - [x] Incident detection + correlation
 - [x] Operations dashboard
-- [x] DEBIT_WITHOUT_CREDIT end-to-end recovery
+- [x] DEBIT_WITHOUT_MERCHANT_SETTLEMENT end-to-end recovery
 - [ ] Real-time WebSocket notifications for incidents
 - [ ] Redis-backed rate limiting for production
 - [ ] PostgreSQL adapter for ledger (alongside Appwrite)

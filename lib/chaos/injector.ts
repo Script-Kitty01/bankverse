@@ -235,6 +235,8 @@ export class ChaosInjector {
         return ChaosInjector.testProviderDown();
       case "slow-reconciliation":
         return ChaosInjector.testSlowReconciliation();
+      case "worker-crash-after-commit":
+        return ChaosInjector.testWorkerCrashAfterCommit();
       case "refund-race-condition":
         return ChaosInjector.testRefundRaceCondition();
       default:
@@ -722,6 +724,75 @@ export class ChaosInjector {
         refundSuccess: refund.success,
         refundId: refund.refundId,
         error: refund.error,
+      },
+    };
+  }
+
+  // ─── Scenario 9: Worker Crash After DB Commit ──────────────────
+  private static async testWorkerCrashAfterCommit(): Promise<{
+    passed: boolean;
+    actualBehavior: string;
+    invariantHeld: boolean;
+    invariantVerification: string;
+    details: Record<string, unknown>;
+  }> {
+    const runId = Date.now();
+    const orchestrator = new PaymentOrchestrator({
+      maxRetries: 1,
+      retryDelayMs: 10,
+    });
+
+    // Process a payment (atomic DB commit of transaction + ledger entries)
+    const payment = await orchestrator.processPayment({
+      customerId: `chaos-crash-${runId}`,
+      merchantId: `chaos-merch-crash-${runId}`,
+      amount: 450,
+      currency: "INR",
+      method: "upi",
+      description: "Worker crash test",
+    });
+
+    if (!payment.success || !payment.transaction) {
+      return {
+        passed: false,
+        actualBehavior: "Precondition failed: could not create payment",
+        invariantHeld: false,
+        invariantVerification: "Could not verify — precondition failed.",
+        details: { error: payment.error },
+      };
+    }
+
+    // Simulate worker restart/retry after crash
+    const replayedPayment = await orchestrator.processPayment({
+      customerId: `chaos-crash-${runId}`,
+      merchantId: `chaos-merch-crash-${runId}`,
+      amount: 450,
+      currency: "INR",
+      method: "upi",
+      description: "Worker crash test",
+      idempotencyKey: payment.transaction.idempotencyKey,
+    });
+
+    const passed =
+      replayedPayment.success &&
+      replayedPayment.transaction?.id === payment.transaction.id;
+
+    const { verifyLedgerIntegrity } = await import("@/lib/ledger/ledger.service");
+    const integrity = await verifyLedgerIntegrity();
+
+    return {
+      passed,
+      actualBehavior: passed
+        ? `Worker restarted after commit: outbox/idempotency key ${payment.transaction.idempotencyKey} replayed safely without duplicate ledger movement (txId=${payment.transaction.id})`
+        : `Replay produced duplicate or mismatched transaction`,
+      invariantHeld: integrity.valid,
+      invariantVerification: integrity.valid
+        ? "At-least-once recovery verified: double-entry balance preserved across simulated crash/retry."
+        : "INVARIANT VIOLATION: Double-entry ledger imbalanced.",
+      details: {
+        transactionId: payment.transaction.id,
+        idempotencyKey: payment.transaction.idempotencyKey,
+        ledgerValid: integrity.valid,
       },
     };
   }

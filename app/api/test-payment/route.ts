@@ -376,7 +376,117 @@ export async function GET() {
     });
   }
 
-  // ─── Test 10: Ledger integrity after all operations ───────────
+  // ─── Test 10: OCC & Idempotency — 100 concurrent payment calls ──
+  try {
+    const orchestrator = new PaymentOrchestrator({
+      maxRetries: 1,
+      retryDelayMs: 10,
+    });
+    const raceIdempotencyKey = `race-idem-${runId}`;
+
+    // Fire 100 simultaneous processPayment calls with the EXACT same idempotency key
+    const processPromises = Array.from({ length: 100 }, () =>
+      orchestrator.processPayment({
+        customerId: `cust-race-${runId}`,
+        merchantId: `merch-race-${runId}`,
+        amount: 1000,
+        currency: "INR",
+        method: "upi",
+        description: "Concurrent processPayment race test",
+        idempotencyKey: raceIdempotencyKey,
+      }),
+    );
+
+    const raceResults = await Promise.all(processPromises);
+    const successful = raceResults.filter((r) => r.success);
+    const txIds = new Set(successful.map((r) => r.transaction?.id));
+
+    const { getLedgerEntriesByTransaction } = await import(
+      "@/lib/ledger/ledger.service"
+    );
+    const entries = await getLedgerEntriesByTransaction(
+      Array.from(txIds)[0] || "",
+    );
+
+    // Exactly 2 pairs of ledger entries: Customer -> Clearing (2) + Clearing -> Merchant (2) = 4 entries total
+    const passed =
+      successful.length === 100 &&
+      txIds.size === 1 &&
+      entries.length === 4;
+
+    results.push({
+      name: "OCC & Idempotency — 100 concurrent payment calls",
+      passed,
+      details: passed
+        ? `100 concurrent requests processed: 100 safe responses, exactly 1 transaction created (${Array.from(txIds)[0]}), exactly 4 ledger entries (Customer→Clearing→Merchant), 0 duplicate movements`
+        : `Expected 100 responses with 1 transaction ID & 4 entries, got ${successful.length} successful, ${txIds.size} unique transaction IDs, ${entries.length} ledger entries`,
+    });
+  } catch (e: any) {
+    results.push({
+      name: "OCC & Idempotency — 100 concurrent payment calls",
+      passed: false,
+      details: "Threw unexpected error",
+      error: e.message,
+    });
+  }
+
+  // ─── Test 11: OCC — 100 concurrent financial settlement attempts ──
+  try {
+    const { recordTransaction, settleToMerchant, getLedgerEntriesByTransaction } =
+      await import("@/lib/ledger/ledger.service");
+
+    // 1. Record Customer -> Clearing transaction (captured, NOT yet settled)
+    const ledgerResult = await recordTransaction({
+      customerId: `cust-settle-${runId}`,
+      merchantId: `merch-settle-${runId}`,
+      amount: 7500,
+      currency: "INR",
+      provider: "mock",
+      providerReference: `ref-settle-${runId}`,
+      idempotencyKey: `idem-settle-${runId}`,
+      description: "Concurrent settlement OCC race test",
+    });
+
+    const txId = ledgerResult.transaction.id;
+    const initialVersion = ledgerResult.transaction.version ?? 1;
+
+    // 2. Fire 100 concurrent settlement attempts with expectedVersion = initialVersion
+    const settlePromises = Array.from({ length: 100 }, () =>
+      settleToMerchant(txId, initialVersion),
+    );
+
+    const settleResults = await Promise.allSettled(settlePromises);
+    const fulfilled = settleResults.filter((r) => r.status === "fulfilled");
+    const rejected = settleResults.filter((r) => r.status === "rejected");
+
+    const entries = await getLedgerEntriesByTransaction(txId);
+    const settlementEntries = entries.filter((e) =>
+      e.description.startsWith("SETTLEMENT:"),
+    );
+
+    const passed =
+      fulfilled.length === 1 &&
+      rejected.length === 99 &&
+      settlementEntries.length === 2 &&
+      entries.length === 4;
+
+    results.push({
+      name: "OCC — 100 concurrent financial settlement attempts",
+      passed,
+      details: passed
+        ? `100 concurrent settlements executed: 1 winner succeeded, 99 OCC conflicts rejected, exactly 1 merchant credit (₹7,500), 0 duplicate movements (4 entries total)`
+        : `Expected 1 winner & 99 OCC conflicts with 2 settlement entries, got: ${fulfilled.length} succeeded, ${rejected.length} rejected, ${settlementEntries.length} settlement entries`,
+    });
+  } catch (e: any) {
+    results.push({
+      name: "OCC — 100 concurrent financial settlement attempts",
+      passed: false,
+      details: "Threw unexpected error",
+      error: e.message,
+    });
+  }
+
+  // ─── Test 12: Ledger integrity after all operations ───────────
   try {
     const integrity = await verifyLedgerIntegrity();
 

@@ -25,6 +25,7 @@ import {
   updatePaymentTransactionState,
   getPaymentTransactionById,
   getPaymentTransactionByIdempotencyKey,
+  runWithEntityLock,
 } from "@/lib/ledger/ledger.service";
 import type { PaymentTransaction } from "@/lib/ledger/types";
 
@@ -116,87 +117,50 @@ export class PaymentOrchestrator {
       request.idempotencyKey ||
       `pay_${request.customerId}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
-    // Idempotency check
-    const existing =
-      await getPaymentTransactionByIdempotencyKey(idempotencyKey);
-    if (existing) {
-      return {
-        success: existing.paymentState === "SUCCESS",
-        transaction: existing,
-        error:
-          existing.paymentState !== "SUCCESS"
-            ? `Payment already exists in state: ${existing.paymentState}`
-            : undefined,
-      };
-    }
+    return runWithEntityLock(`idempotency:${idempotencyKey}`, async () => {
+      // Idempotency check
+      const existing =
+        await getPaymentTransactionByIdempotencyKey(idempotencyKey);
+      if (existing) {
+        return {
+          success: existing.paymentState === "SUCCESS",
+          transaction: existing,
+          orderId: existing.providerOrderId,
+          paymentId: existing.providerPaymentId,
+          error:
+            existing.paymentState !== "SUCCESS"
+              ? `Payment already exists in state: ${existing.paymentState}`
+              : undefined,
+        };
+      }
 
-    // Step 1: Create order via provider
-    const orderResult = await this.provider.createOrder({
-      amount: request.amount,
-      currency: request.currency,
-      receipt: `rcpt_${idempotencyKey}`,
-      notes: {
-        customerId: request.customerId,
-        merchantId: request.merchantId,
-        method: request.method,
-      },
-    });
-
-    if (!orderResult.success || !orderResult.orderId) {
-      return {
-        success: false,
-        error: orderResult.error || "Order creation failed",
-      };
-    }
-
-    // Step 2: Verify & capture with retries (NO ledger yet — money hasn't moved)
-    const captureResult = await this.captureWithRetries(
-      orderResult.orderId,
-      request,
-    );
-
-    if (captureResult.success) {
-      // Step 3a: Provider confirmed capture → NOW record the ledger
-      const ledgerResult = await recordTransaction({
-        customerId: request.customerId,
-        merchantId: request.merchantId,
+      // Step 1: Create order via provider
+      const orderResult = await this.provider.createOrder({
         amount: request.amount,
         currency: request.currency,
-        provider: this.provider.config.name,
-        providerReference: orderResult.orderId,
-        providerOrderId: orderResult.orderId,
-        idempotencyKey,
-        description: request.description || `Payment via ${request.method}`,
-        method: request.method,
+        receipt: `rcpt_${idempotencyKey}`,
+        notes: {
+          customerId: request.customerId,
+          merchantId: request.merchantId,
+          method: request.method,
+        },
       });
 
-      // Update with provider payment ID
-      await updatePaymentTransactionState(
-        ledgerResult.transaction.id,
-        PaymentStateMachine.transitionPayment("PROCESSING", "SUCCESS"),
-        "NOT_REQUIRED",
-        { providerPaymentId: captureResult.paymentId },
+      if (!orderResult.success || !orderResult.orderId) {
+        return {
+          success: false,
+          error: orderResult.error || "Order creation failed",
+        };
+      }
+
+      // Step 2: Verify & capture with retries (NO ledger yet — money hasn't moved)
+      const captureResult = await this.captureWithRetries(
+        orderResult.orderId,
+        request,
       );
 
-      // Step 3b: Settle from clearing to merchant
-      await settleToMerchant(ledgerResult.transaction.id);
-
-      return {
-        success: true,
-        transaction: ledgerResult.transaction,
-        orderId: orderResult.orderId,
-        paymentId: captureResult.paymentId,
-      };
-    }
-
-    if (captureResult.unknown) {
-      // Step 3b: UNKNOWN — query provider to resolve
-      const statusResult = await this.provider.getPaymentStatus({
-        orderId: orderResult.orderId,
-      });
-
-      if (statusResult.success && statusResult.status === "captured") {
-        // Provider says captured — record ledger and settle
+      if (captureResult.success) {
+        // Step 3a: Provider confirmed capture → NOW record the ledger
         const ledgerResult = await recordTransaction({
           customerId: request.customerId,
           merchantId: request.merchantId,
@@ -210,40 +174,83 @@ export class PaymentOrchestrator {
           method: request.method,
         });
 
-        await updatePaymentTransactionState(
+        // Update with provider payment ID and version OCC guard
+        const updatedTx = await updatePaymentTransactionState(
           ledgerResult.transaction.id,
           PaymentStateMachine.transitionPayment("PROCESSING", "SUCCESS"),
           "NOT_REQUIRED",
-          { providerPaymentId: statusResult.paymentId },
+          { providerPaymentId: captureResult.paymentId },
+          ledgerResult.transaction.version ?? 1,
         );
 
+        // Step 3b: Settle from clearing to merchant
         await settleToMerchant(ledgerResult.transaction.id);
 
         return {
           success: true,
-          transaction: ledgerResult.transaction,
+          transaction: updatedTx || ledgerResult.transaction,
           orderId: orderResult.orderId,
-          paymentId: statusResult.paymentId,
+          paymentId: captureResult.paymentId,
         };
       }
 
-      // Provider says not captured — no ledger, mark FAILED
+      if (captureResult.unknown) {
+        // Step 3b: UNKNOWN — query provider to resolve
+        const statusResult = await this.provider.getPaymentStatus({
+          orderId: orderResult.orderId,
+        });
+
+        if (statusResult.success && statusResult.status === "captured") {
+          // Provider says captured — record ledger and settle
+          const ledgerResult = await recordTransaction({
+            customerId: request.customerId,
+            merchantId: request.merchantId,
+            amount: request.amount,
+            currency: request.currency,
+            provider: this.provider.config.name,
+            providerReference: orderResult.orderId,
+            providerOrderId: orderResult.orderId,
+            idempotencyKey,
+            description: request.description || `Payment via ${request.method}`,
+            method: request.method,
+          });
+
+          const updatedTx = await updatePaymentTransactionState(
+            ledgerResult.transaction.id,
+            PaymentStateMachine.transitionPayment("PROCESSING", "SUCCESS"),
+            "NOT_REQUIRED",
+            { providerPaymentId: statusResult.paymentId },
+            ledgerResult.transaction.version ?? 1,
+          );
+
+          await settleToMerchant(ledgerResult.transaction.id);
+
+          return {
+            success: true,
+            transaction: updatedTx || ledgerResult.transaction,
+            orderId: orderResult.orderId,
+            paymentId: statusResult.paymentId,
+          };
+        }
+
+        // Provider says not captured — no ledger, mark FAILED
+        return {
+          success: false,
+          orderId: orderResult.orderId,
+          error:
+            captureResult.error || "Payment not captured (resolved to FAILED)",
+          retryCount: captureResult.retryCount,
+        };
+      }
+
+      // Step 3c: FAILED — no ledger entry (no money moved)
       return {
         success: false,
         orderId: orderResult.orderId,
-        error:
-          captureResult.error || "Payment not captured (resolved to FAILED)",
+        error: captureResult.error,
         retryCount: captureResult.retryCount,
       };
-    }
-
-    // Step 3c: FAILED — no ledger entry (no money moved)
-    return {
-      success: false,
-      orderId: orderResult.orderId,
-      error: captureResult.error,
-      retryCount: captureResult.retryCount,
-    };
+    });
   }
 
   // ─── Capture with Retries ─────────────────────────────────────
