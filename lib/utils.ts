@@ -182,11 +182,11 @@ export function extractCustomerIdFromUrl(url: string) {
 }
 
 export function encryptId(id: string) {
-  return btoa(id);
+  return Buffer.from(id, "utf-8").toString("base64url");
 }
 
 export function decryptId(id: string) {
-  return atob(id);
+  return Buffer.from(id, "base64url").toString("utf-8");
 }
 
 export const getTransactionStatus = (date: Date) => {

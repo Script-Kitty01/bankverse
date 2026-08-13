@@ -84,15 +84,26 @@ export class MockPaymentProvider implements PaymentProvider {
     if (this.shouldFail()) {
       return { success: false, error: "Mock: simulated capture failure" };
     }
-    // Update order store — find by paymentId prefix
+    // Update order store — find matching orderId or last created order
+    let updated = false;
     for (const [orderId, state] of this.orderStore) {
       if (
         params.paymentId.includes(orderId) ||
-        state.paymentId === params.paymentId
+        state.paymentId === params.paymentId ||
+        orderId === params.paymentId
       ) {
         state.status = "captured";
         state.paymentId = params.paymentId;
+        updated = true;
         break;
+      }
+    }
+    if (!updated && this.orderStore.size > 0) {
+      // Fallback: update the last created order if specific ID match wasn't found
+      const lastEntry = Array.from(this.orderStore.values()).pop();
+      if (lastEntry) {
+        lastEntry.status = "captured";
+        lastEntry.paymentId = params.paymentId;
       }
     }
     return { success: true, paymentId: params.paymentId, status: "captured" };

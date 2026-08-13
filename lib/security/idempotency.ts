@@ -94,7 +94,7 @@ export class IdempotencyManager {
       };
 
       // Populate Tier 1 cache asynchronously
-      this.cacheResult(idempotencyKey, dbResult);
+      IdempotencyManager.cacheResult(idempotencyKey, dbResult).catch(() => {});
       return dbResult;
     }
 

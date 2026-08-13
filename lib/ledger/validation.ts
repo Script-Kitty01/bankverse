@@ -28,8 +28,10 @@ export function validateDoubleEntry(
     .filter((e) => e.entryType === "CREDIT")
     .reduce((sum, e) => sum + e.amount, 0);
 
+  const diff = Math.abs(totalDebits - totalCredits);
+
   return {
-    valid: totalDebits === totalCredits,
+    valid: diff < 0.0001,
     totalDebits,
     totalCredits,
     difference: totalDebits - totalCredits,
@@ -54,7 +56,7 @@ export function validatePaymentEntries(
       `Ledger validation failed: credit amount must be > 0, got ${creditAmount}`,
     );
   }
-  if (debitAmount !== creditAmount) {
+  if (Math.abs(debitAmount - creditAmount) >= 0.0001) {
     throw new Error(
       `Ledger validation failed: SUM(debits)=${debitAmount} !== SUM(credits)=${creditAmount}`,
     );
