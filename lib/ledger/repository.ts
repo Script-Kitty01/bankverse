@@ -15,6 +15,7 @@ import {
   PAYMENT_TRANSACTIONS_COLLECTION_ID,
 } from "@/lib/appwrite/config";
 import type { LedgerAccount, LedgerEntry, PaymentTransaction } from "./types";
+import { createOutboxEvent, outboxStore } from "./outbox";
 
 // ─── Helpers ────────────────────────────────────────────────────
 
@@ -534,6 +535,157 @@ export async function updatePaymentTransactionState(
 
   return mapDocToTransaction(doc);
 }
+export async function executeAtomicSettlementInDemoMode(params: {
+  transactionId: string;
+  expectedVersion?: number;
+  clearingAccountId: string;
+  merchantAccountId: string;
+  amount: number;
+  currency: string;
+  merchantId: string;
+  options?: { simulateFailureStage?: "MERCHANT_CREDIT_FAIL" };
+}): Promise<{ debitEntry: LedgerEntry; creditEntry: LedgerEntry }> {
+  const {
+    transactionId,
+    expectedVersion,
+    clearingAccountId,
+    merchantAccountId,
+    amount,
+    currency,
+    merchantId,
+    options,
+  } = params;
+
+  const tx = demoStore.paymentTransactions.find((t) => t.id === transactionId);
+  if (!tx) throw new Error(`Transaction ${transactionId} not found`);
+
+  const targetVersion = expectedVersion ?? tx.version;
+  if (tx.version !== targetVersion) {
+    throw new Error(
+      `OCC Conflict: Settlement version mismatch for transaction ${transactionId}. Expected ${targetVersion}, got ${tx.version}`,
+    );
+  }
+
+  // Idempotency check: if settlement entries already exist in demo store
+  const existingDebit = demoStore.ledgerEntries.find(
+    (e) =>
+      e.transactionId === transactionId &&
+      e.entryType === "DEBIT" &&
+      e.description.startsWith("SETTLEMENT:"),
+  );
+  const existingCredit = demoStore.ledgerEntries.find(
+    (e) =>
+      e.transactionId === transactionId &&
+      e.entryType === "CREDIT" &&
+      e.description.startsWith("SETTLEMENT:"),
+  );
+  if (existingDebit && existingCredit) {
+    return { debitEntry: existingDebit, creditEntry: existingCredit };
+  }
+
+  // Save full state snapshot for atomic rollback
+  const initialTxVersion = tx.version;
+  const initialSettlementState = tx.settlementState;
+  const initialUpdatedAt = tx.updatedAt;
+  const initialEntriesCount = demoStore.ledgerEntries.length;
+  const initialOutboxCount = outboxStore.length;
+
+  const clearingAcct = demoStore.ledgerAccounts.find((a) => a.id === clearingAccountId);
+  const merchantAcct = demoStore.ledgerAccounts.find((a) => a.id === merchantAccountId);
+
+  const initialClearingSnap = clearingAcct ? { ...clearingAcct } : null;
+  const initialMerchantSnap = merchantAcct ? { ...merchantAcct } : null;
+
+  try {
+    // 1. Transaction state transition + version increment
+    tx.settlementState = "RESOLVED";
+    tx.version = (tx.version ?? 1) + 1;
+    tx.updatedAt = new Date().toISOString();
+
+    // 2. Clearing DEBIT entry
+    const debitEntry: LedgerEntry = {
+      id: generateId("lentry"),
+      transactionId,
+      accountId: clearingAccountId,
+      entryType: "DEBIT",
+      amount,
+      currency,
+      description: `SETTLEMENT: release from clearing to ${merchantId}`,
+      createdAt: new Date().toISOString(),
+    };
+    demoStore.ledgerEntries.push(debitEntry);
+
+    // Simulated failure point: payment updated ✓, clearing debited ✓, merchant credit 💥
+    if (options?.simulateFailureStage === "MERCHANT_CREDIT_FAIL") {
+      throw new Error("SIMULATED_MERCHANT_CREDIT_FAILURE");
+    }
+
+    // 3. Merchant CREDIT entry
+    const creditEntry: LedgerEntry = {
+      id: generateId("lentry"),
+      transactionId,
+      accountId: merchantAccountId,
+      entryType: "CREDIT",
+      amount,
+      currency,
+      description: `SETTLEMENT: credit to ${merchantId}`,
+      createdAt: new Date().toISOString(),
+    };
+    demoStore.ledgerEntries.push(creditEntry);
+
+    // 4. Update Clearing Account Aggregates
+    if (clearingAcct) {
+      const cEntries = demoStore.ledgerEntries.filter((e) => e.accountId === clearingAccountId);
+      const cDebits = cEntries.filter((e) => e.entryType === "DEBIT").reduce((sum, e) => sum + e.amount, 0);
+      const cCredits = cEntries.filter((e) => e.entryType === "CREDIT").reduce((sum, e) => sum + e.amount, 0);
+      clearingAcct.totalDebits = cDebits;
+      clearingAcct.totalCredits = cCredits;
+      clearingAcct.derivedBalance = cCredits - cDebits;
+      clearingAcct.version = (clearingAcct.version ?? 1) + 1;
+      clearingAcct.updatedAt = new Date().toISOString();
+    }
+
+    // 5. Update Merchant Account Aggregates
+    if (merchantAcct) {
+      const mEntries = demoStore.ledgerEntries.filter((e) => e.accountId === merchantAccountId);
+      const mDebits = mEntries.filter((e) => e.entryType === "DEBIT").reduce((sum, e) => sum + e.amount, 0);
+      const mCredits = mEntries.filter((e) => e.entryType === "CREDIT").reduce((sum, e) => sum + e.amount, 0);
+      merchantAcct.totalDebits = mDebits;
+      merchantAcct.totalCredits = mCredits;
+      merchantAcct.derivedBalance = mCredits - mDebits;
+      merchantAcct.version = (merchantAcct.version ?? 1) + 1;
+      merchantAcct.updatedAt = new Date().toISOString();
+    }
+
+    // 6. Create Outbox Event
+    await createOutboxEvent({
+      aggregateId: transactionId,
+      eventType: "PAYMENT_SETTLED",
+      payload: {
+        transactionId,
+        amount,
+        currency,
+        merchantId,
+        version: tx.version,
+        settlementState: "RESOLVED",
+      },
+    });
+
+    return { debitEntry, creditEntry };
+  } catch (err) {
+    // Complete rollback of all mutations
+    tx.version = initialTxVersion;
+    tx.settlementState = initialSettlementState;
+    tx.updatedAt = initialUpdatedAt;
+    demoStore.ledgerEntries.length = initialEntriesCount;
+    outboxStore.length = initialOutboxCount;
+    if (clearingAcct && initialClearingSnap) Object.assign(clearingAcct, initialClearingSnap);
+    if (merchantAcct && initialMerchantSnap) Object.assign(merchantAcct, initialMerchantSnap);
+    throw err;
+  }
+}
+
+
 
 export async function getAllPaymentTransactions(
   limit = 100,
@@ -605,6 +757,24 @@ export async function createLedgerEntry(data: {
     createdAt: doc.createdAt,
   };
 }
+export async function deleteLedgerEntry(id: string): Promise<void> {
+  if (isDemoMode()) {
+    const index = demoStore.ledgerEntries.findIndex((e) => e.id === id);
+    if (index !== -1) {
+      demoStore.ledgerEntries.splice(index, 1);
+    }
+    return;
+  }
+
+  const db = getDb();
+  try {
+    await db.deleteDocument(DATABASE_ID, LEDGER_ENTRIES_COLLECTION_ID, id);
+  } catch {
+    // Best-effort cleanup
+  }
+}
+
+
 
 export async function getLedgerEntriesByTransaction(
   transactionId: string,

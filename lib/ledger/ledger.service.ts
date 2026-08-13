@@ -31,15 +31,19 @@ import {
   getPaymentTransactionByIdempotencyKey,
   updatePaymentTransactionState,
   createLedgerEntry,
+  deleteLedgerEntry,
   getLedgerEntriesByTransaction,
   getLedgerEntriesByAccount,
   getAllLedgerEntries,
+  executeAtomicSettlementInDemoMode,
+  isDemoMode,
 } from "./repository";
 import {
   validatePaymentEntries,
   verifyLedgerIntegrity as validateIntegrity,
 } from "./validation";
 import { computeBalance, zeroBalance } from "./balance";
+import { createOutboxEvent } from "./outbox";
 
 // ─── Ledger Account ─────────────────────────────────────────────
 
@@ -184,45 +188,15 @@ export async function recordTransaction(
 export async function settleToMerchant(
   transactionId: string,
   expectedVersion?: number,
+  options?: { simulateFailureStage?: "MERCHANT_CREDIT_FAIL" },
 ): Promise<{ debitEntry: LedgerEntry; creditEntry: LedgerEntry }> {
   const transaction = await getPaymentTransactionById(transactionId);
   if (!transaction) throw new Error(`Transaction ${transactionId} not found`);
 
-  // OCC Check
+  // OCC Check: Enforce expected version at settlement boundary
   if (expectedVersion !== undefined && transaction.version !== expectedVersion) {
     throw new Error(
       `OCC Conflict: Settlement version mismatch for transaction ${transactionId}. Expected ${expectedVersion}, got ${transaction.version}`,
-    );
-  }
-
-  // Idempotency check: if settlement entries already exist
-  const allEntries = await getLedgerEntriesByTransaction(transactionId);
-  const existingSettlement = allEntries.find((e) =>
-    e.description.startsWith("SETTLEMENT:"),
-  );
-  if (existingSettlement) {
-    const settlementDebit = allEntries.find(
-      (e) => e.entryType === "DEBIT" && e.description.startsWith("SETTLEMENT:"),
-    )!;
-    const settlementCredit = allEntries.find(
-      (e) =>
-        e.entryType === "CREDIT" && e.description.startsWith("SETTLEMENT:"),
-    )!;
-    return { debitEntry: settlementDebit, creditEntry: settlementCredit };
-  }
-
-  // Atomically update state & version via OCC
-  const updatedTx = await updatePaymentTransactionState(
-    transactionId,
-    transaction.paymentState,
-    "RESOLVED",
-    {},
-    expectedVersion ?? transaction.version,
-  );
-
-  if (!updatedTx) {
-    throw new Error(
-      `Failed to update settlement state for transaction ${transactionId}`,
     );
   }
 
@@ -235,29 +209,101 @@ export async function settleToMerchant(
     "MERCHANT",
   );
 
-  // DEBIT clearing, CREDIT merchant
-  const settlementDebit = await createLedgerEntry({
+  if (isDemoMode()) {
+    return executeAtomicSettlementInDemoMode({
+      transactionId,
+      expectedVersion,
+      clearingAccountId: clearingAccount.id,
+      merchantAccountId: merchantAccount.id,
+      amount: transaction.amount,
+      currency: transaction.currency,
+      merchantId: transaction.merchantId,
+      options,
+    });
+  }
+
+  // Idempotency check: if settlement entries already exist
+  const allEntries = await getLedgerEntriesByTransaction(transactionId);
+  const existingSettlement = allEntries.filter((e) =>
+    e.description.startsWith("SETTLEMENT:"),
+  );
+  if (existingSettlement.length >= 2) {
+    const settlementDebit = existingSettlement.find((e) => e.entryType === "DEBIT")!;
+    const settlementCredit = existingSettlement.find((e) => e.entryType === "CREDIT")!;
+    if (settlementDebit && settlementCredit) {
+      return { debitEntry: settlementDebit, creditEntry: settlementCredit };
+    }
+  }
+
+  // Step 1: Atomically update state & increment version via OCC.
+  const targetVersion = expectedVersion ?? transaction.version;
+  const updatedTx = await updatePaymentTransactionState(
     transactionId,
-    accountId: clearingAccount.id,
-    entryType: "DEBIT",
-    amount: transaction.amount,
-    currency: transaction.currency,
-    description: `SETTLEMENT: release from clearing to ${transaction.merchantId}`,
-  });
+    transaction.paymentState,
+    "RESOLVED",
+    {},
+    targetVersion,
+  );
 
-  const settlementCredit = await createLedgerEntry({
-    transactionId,
-    accountId: merchantAccount.id,
-    entryType: "CREDIT",
-    amount: transaction.amount,
-    currency: transaction.currency,
-    description: `SETTLEMENT: credit to ${transaction.merchantId}`,
-  });
+  if (!updatedTx) {
+    throw new Error(
+      `Failed to update settlement state for transaction ${transactionId}`,
+    );
+  }
 
-  await updateAccountAggregates(clearingAccount.id, clearingAccount.version);
-  await updateAccountAggregates(merchantAccount.id, merchantAccount.version);
+  // Step 2: Atomic financial entry creation (Clearing → Merchant)
+  const createdEntries: LedgerEntry[] = [];
+  try {
+    const settlementDebit = await createLedgerEntry({
+      transactionId,
+      accountId: clearingAccount.id,
+      entryType: "DEBIT",
+      amount: transaction.amount,
+      currency: transaction.currency,
+      description: `SETTLEMENT: release from clearing to ${transaction.merchantId}`,
+    });
+    createdEntries.push(settlementDebit);
 
-  return { debitEntry: settlementDebit, creditEntry: settlementCredit };
+    const settlementCredit = await createLedgerEntry({
+      transactionId,
+      accountId: merchantAccount.id,
+      entryType: "CREDIT",
+      amount: transaction.amount,
+      currency: transaction.currency,
+      description: `SETTLEMENT: credit to ${transaction.merchantId}`,
+    });
+    createdEntries.push(settlementCredit);
+
+    await updateAccountAggregates(clearingAccount.id, clearingAccount.version);
+    await updateAccountAggregates(merchantAccount.id, merchantAccount.version);
+
+    await createOutboxEvent({
+      aggregateId: transactionId,
+      eventType: "PAYMENT_SETTLED",
+      payload: {
+        transactionId,
+        amount: transaction.amount,
+        currency: transaction.currency,
+        merchantId: transaction.merchantId,
+        version: updatedTx.version,
+        settlementState: "RESOLVED",
+      },
+    });
+
+    return { debitEntry: settlementDebit, creditEntry: settlementCredit };
+  } catch (err) {
+    for (const entry of createdEntries) {
+      await deleteLedgerEntry(entry.id);
+    }
+    await updatePaymentTransactionState(
+      transactionId,
+      transaction.paymentState,
+      transaction.settlementState,
+      {},
+      updatedTx.version,
+    );
+    throw err;
+  }
 }
 
 /**

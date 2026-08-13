@@ -1,30 +1,28 @@
-﻿# 🛡️ BankVerse — Payment Reliability Platform
-
 <div align="center">
-
-![Next.js](https://img.shields.io/badge/Next.js-16-black?style=for-the-badge&logo=next.js&logoColor=white)
-![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
-![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.4-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)
-![React 19](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)
-![Appwrite](https://img.shields.io/badge/Appwrite-Backend-FD366E?style=for-the-badge&logo=appwrite&logoColor=white)
-![Plaid](https://img.shields.io/badge/Plaid-Banking-000000?style=for-the-badge&logo=plaid&logoColor=white)
-![Dwolla](https://img.shields.io/badge/Dwolla-ACH-FF6B00?style=for-the-badge&logo=dwolla&logoColor=white)
-![Razorpay](https://img.shields.io/badge/Razorpay-UPI-02042B?style=for-the-badge&logo=razorpay&logoColor=white)
-![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)
-![Sentry](https://img.shields.io/badge/Sentry-Monitoring-362D59?style=for-the-badge&logo=sentry&logoColor=white)
-
-<br/>
 
 <img src="public/icons/logo.svg" alt="BankVerse Logo" width="120" />
 
-# 🛡️ BankVerse
+# 🛡️ BankVerse — Payment Reliability Platform
 
 ### _BankVerse reduces the operational cost and customer impact of payment failures._
 
 **Double-entry ledger • Automated reconciliation • Chaos engineering • Incident management**
 
+[![Next.js](https://img.shields.io/badge/Next.js-16-black?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.4-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
+[![React 19](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev)
+[![Appwrite](https://img.shields.io/badge/Appwrite-Backend-FD366E?style=for-the-badge&logo=appwrite&logoColor=white)](https://appwrite.io)
+[![Plaid](https://img.shields.io/badge/Plaid-Banking-000000?style=for-the-badge&logo=plaid&logoColor=white)](https://plaid.com)
+[![Dwolla](https://img.shields.io/badge/Dwolla-ACH-FF6B00?style=for-the-badge&logo=dwolla&logoColor=white)](https://www.dwolla.com)
+[![Razorpay](https://img.shields.io/badge/Razorpay-UPI-02042B?style=for-the-badge&logo=razorpay&logoColor=white)](https://razorpay.com)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com)
+[![Sentry](https://img.shields.io/badge/Sentry-Monitoring-362D59?style=for-the-badge&logo=sentry&logoColor=white)](https://sentry.io)
+
+<br/>
+
 [![GitHub stars](https://img.shields.io/github/stars/Script-Kitty01/bankverse?style=social)](https://github.com/Script-Kitty01/bankverse)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://makeapullrequest.com)
 
 [Why BankVerse](#-why-bankverse) • [Reliability Architecture](#-reliability-architecture) • [Quick Start](#-quick-start) • [Features](#-features) • [Tech Stack](#-tech-stack)
@@ -145,9 +143,9 @@ Beyond the clearing model, BankVerse keeps financial state safe under concurrenc
 
 | Mechanism                  | How it works                                                                                                                                                 | Guarantee                                                                                                                                         |
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **OCC entity versioning**  | `PaymentTransaction` and `LedgerAccount` carry a `version`. Every state transition and settlement is a conditional update (`WHERE id = ? AND version = ?`).  | Exactly **1 winner** and **N-1** safe OCC conflicts — no double-settlements or double-refunds, verified by a 100-concurrent settlement race test. |
-| **Two-tiered idempotency** | **Tier 1** — Redis-style lock + result cache for fast duplicate rejection. **Tier 2** — DB unique constraint on `idempotencyKey` as the authoritative guard. | N identical requests produce **1 financial movement** and N identical safe responses.                                                             |
-| **Transactional outbox**   | Payment state, ledger entries, and outbox events persist atomically in a single transaction; an async worker delivers events at-least-once.                  | No lost events and no duplicate ledger movements across worker crashes — events are recovered on restart.                                         |
+| **OCC entity versioning**  | `PaymentTransaction` and `LedgerAccount` carry a `version`. Single-process demo mode provides atomic OCC; Appwrite mode uses version check guards.        | Exactly **1 winner** and **N-1** safe OCC conflicts — no double-settlements or double-refunds, verified by a 100-concurrent settlement race test. |
+| **Two-tiered idempotency** | **Tier 1** — TTL lock & result cache. **Tier 2** — DB uniqueness check + request payload hash verification.                                                 | N identical requests produce **1 financial movement** and N identical safe responses; altered requests with same key are rejected.             |
+| **Transactional outbox**   | Payment state, ledger entries, and outbox events commit in an atomic transaction unit; background worker delivers events with lease expiration & crash recovery. | No lost events and no duplicate ledger movements across worker crashes — events are recovered on restart.                                         |
 
 ---
 
@@ -178,23 +176,32 @@ Create `.env.local`:
 # ========== Demo Mode ==========
 NEXT_PUBLIC_DEMO_MODE=true
 
-# ========== Appwrite (optional for production) ==========
+# ========== Appwrite (optional for production persistence) ==========
 NEXT_PUBLIC_APPWRITE_ENDPOINT=https://cloud.appwrite.io/v1
 NEXT_PUBLIC_APPWRITE_PROJECT_ID=your-project-id
 NEXT_PUBLIC_APPWRITE_DATABASE_ID=your-database-id
+NEXT_PUBLIC_APPWRITE_USERS_COLLECTION_ID=users
+NEXT_PUBLIC_APPWRITE_BANKS_COLLECTION_ID=banks
+NEXT_PUBLIC_APPWRITE_TRANSACTIONS_COLLECTION_ID=transactions
 APPWRITE_API_KEY=your-api-key
 
 # ========== Payment Providers (optional) ==========
-PLAID_CLIENT_ID=your-client-id
-PLAID_SECRET=your-sandbox-secret
+NEXT_PUBLIC_PLAID_ENABLED=false
+PLAID_CLIENT_ID=your-plaid-client-id
+PLAID_SECRET=your-plaid-secret
+PLAID_ENV=sandbox
+
 DWOLLA_KEY=your-dwolla-key
 DWOLLA_SECRET=your-dwolla-secret
+DWOLLA_ENV=sandbox
+
 RAZORPAY_KEY_ID=rzp_test_xxx
 RAZORPAY_KEY_SECRET=xxx
 NEXT_PUBLIC_RAZORPAY_KEY_ID=rzp_test_xxx
 
-# ========== Sentry (optional) ==========
+# ========== Sentry Monitoring (optional) ==========
 NEXT_PUBLIC_SENTRY_DSN=your-sentry-dsn
+SENTRY_AUTH_TOKEN=your-sentry-token
 ```
 
 ### 3. Run
@@ -208,12 +215,12 @@ Open [http://localhost:3000](http://localhost:3000).
 ### 4. Run the Verification Test Suite
 
 ```bash
-# Run all 43 automated verification checks
+# Run all 45 automated verification checks
 npm test
 
 # Or via HTTP endpoints when server is running
 curl http://localhost:3000/api/test-ledger          # Phase 1: 7 tests
-curl http://localhost:3000/api/test-payment         # Phase 2: 12 tests (incl. OCC settlement race)
+curl http://localhost:3000/api/test-payment         # Phase 2: 14 tests (incl. OCC settlement race, atomic rollback & idempotency hash validation)
 curl http://localhost:3000/api/test-reconciliation  # Phase 3: 7 tests
 curl http://localhost:3000/api/test-chaos           # Phase 4: 9 tests
 curl http://localhost:3000/api/test-operations      # Phase 5: 7 tests
@@ -236,9 +243,9 @@ docker compose up --build
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Double-Entry Ledger**          | Append-only entries. SUM(debits) === SUM(credits) enforced. Reversals create new entries, never modify originals.                                                                           |
 | **Clearing Account Lifecycle**   | Three-legged booking (Customer → Clearing → Merchant). Merchant is never credited until provider capture is confirmed.                                                                      |
-| **Optimistic Concurrency (OCC)** | Entity versioning on transactions & accounts. Conditional state transitions give 1 winner + N-1 safe conflicts (100-concurrent settlement race test).                                       |
-| **Two-Tiered Idempotency**       | Tier 1 Redis lock + result cache; Tier 2 DB unique constraint on `idempotencyKey`. N duplicates → 1 movement, N identical safe responses.                                                   |
-| **Transactional Outbox**         | Payment state + ledger entries + outbox events commit atomically; async worker delivers at-least-once across crashes.                                                                       |
+| **Optimistic Concurrency (OCC)** | Entity versioning on transactions & accounts. Atomic OCC in single-process demo mode (100-concurrent settlement race test).                              |
+| **Two-Tiered Idempotency**       | TTL lock & result cache + DB idempotencyKey check with request parameter hash mismatch validation.                                                            |
+| **Transactional Outbox**         | Outbox event staging alongside payment mutations; async worker background processor with lease visibility timeouts and crash recovery.                           |
 | **Automated Reconciliation**     | Match internal ledger against provider records. Structured mismatch evidence (AMOUNT_MISMATCH, MISSING_INTERNAL, DEBIT_WITHOUT_MERCHANT_SETTLEMENT, DUPLICATE).                             |
 | **Dual-Dimension State Machine** | PaymentState (CREATED→PROCESSING→SUCCESS/FAILED) + SettlementState (NOT_REQUIRED→PENDING_RECONCILIATION→RECONCILING→RESOLVED/REFUNDED).                                                     |
 | **Chaos Engineering**            | 9 failure scenarios: provider timeout, amount mismatch, duplicate charge, missing credit, webhook disorder, provider down, bulk mismatch, worker crash after commit, refund race condition. |
@@ -350,12 +357,12 @@ bankverse/
 
 ## 🧪 Test Suite
 
-BankVerse ships with **43 automated verification checks** across 6 phases (runnable via `npm test`):
+BankVerse ships with **45 automated verification checks** across 6 phases (runnable via `npm test`):
 
 | Phase | Endpoint                         | Tests | What it verifies                                                                                                                                 |
 | ----- | -------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 1     | `/api/test-ledger`               | 7     | Double-entry recording, idempotency, reversals, derived balances, integrity                                                                      |
-| 2     | `/api/test-payment`              | 12    | State machine transitions, mock provider, full payment flow, refunds, OCC state race, OCC processPayment race, OCC settlement race               |
+| 2     | `/api/test-payment`              | 14    | State machine transitions, mock provider, payment flow, refunds, OCC state race, OCC settlement race, atomic rollback & idempotency payload hash verification |
 | 3     | `/api/test-reconciliation`       | 7     | Internal/external matching, mismatch detection, evidence generation                                                                              |
 | 4     | `/api/test-chaos`                | 9     | Provider timeout, amount mismatch, duplicate charge, missing credit, webhook disorder, provider down, bulk mismatch, crash recovery, refund race |
 | 5     | `/api/test-operations`           | 7     | Incident detection, reconciliation incidents, operations snapshot, incident lifecycle, API endpoint, provider health, incident correlation       |
@@ -397,26 +404,26 @@ BankVerse ships with **43 automated verification checks** across 6 phases (runna
 
 ---
 
-## 🎯 Roadmap
+## 🎯 Architecture Status & Roadmap
 
-- [x] Double-entry ledger with append-only entries
-- [x] Three-legged clearing model (Customer → Clearing → Merchant)
-- [x] Optimistic Concurrency Control (OCC) entity versioning
-- [x] Two-tiered idempotency (Redis + DB)
-- [x] Transactional outbox + async event worker
-- [x] Payment orchestrator with state machine
-- [x] Automated reconciliation engine
-- [x] Chaos engineering (9 failure scenarios)
-- [x] Incident detection + correlation
-- [x] Operations dashboard
-- [x] DEBIT_WITHOUT_MERCHANT_SETTLEMENT end-to-end recovery
-- [ ] Real-time WebSocket notifications for incidents
-- [ ] Redis-backed rate limiting for production
-- [ ] PostgreSQL adapter for ledger (alongside Appwrite)
-- [ ] Scheduled reconciliation (cron-based)
-- [ ] PagerDuty / Slack incident alerts
-- [ ] Multi-currency ledger support
-- [ ] SOC 2 compliance evidence export
+### 🟢 DONE
+- [x] **Double-entry ledger** — append-only entries with derived balances
+- [x] **Clearing model** — three-legged booking (Customer → Clearing → Merchant)
+- [x] **Payment state machine** — dual-dimension FSM with UNKNOWN state handling
+- [x] **Reconciliation engine** — internal vs external matching with structured mismatch evidence
+- [x] **Incident correlation** — 5-min window grouping by provider & mismatch type
+- [x] **Chaos framework** — 9 fault injection scenarios verifying financial invariants
+- [x] **OCC verification tests** — 100-concurrent settlement race & state transition tests
+
+### 🔶 IN PROGRESS
+- [ ] **Persistence-level OCC** — native Appwrite / PostgreSQL atomic conditional UPDATE driver
+- [ ] **Atomic settlement** — single persistence transaction boundary across Payment, Ledger, and Outbox
+
+### ⏳ NEXT
+- [ ] **Real idempotency** — Redis (`ioredis`) client adapter with atomic `SET key token NX EX` locking & DB unique index
+- [ ] **Persistent transactional outbox** — durable `outbox_events` collection with worker lease visibility timeouts
+- [ ] **Durable worker** — background processor recovering stale leases after worker crashes
+- [ ] **Webhook reliability** — asynchronous webhook ingestion with signature verification & event deduplication
 
 ---
 
@@ -444,6 +451,6 @@ MIT License — see [LICENSE](LICENSE).
 
 ⭐ **Star this repo** if you find it useful!
 
-[⬆ Back to Top](#%EF%B8%8F-bankverse--payment-reliability-platform)
+[⬆ Back to Top](#-bankverse--payment-reliability-platform)
 
 </div>

@@ -432,13 +432,23 @@ export async function GET() {
 
   // ─── Test 11: OCC — 100 concurrent financial settlement attempts ──
   try {
-    const { recordTransaction, settleToMerchant, getLedgerEntriesByTransaction } =
-      await import("@/lib/ledger/ledger.service");
+    const {
+      recordTransaction,
+      settleToMerchant,
+      getLedgerEntriesByTransaction,
+      getPaymentTransactionById,
+      getOrCreateLedgerAccount,
+      getOrCreateClearingAccount,
+      verifyLedgerIntegrity,
+    } = await import("@/lib/ledger/ledger.service");
+
+    const customerId = `cust-settle-${runId}`;
+    const merchantId = `merch-settle-${runId}`;
 
     // 1. Record Customer -> Clearing transaction (captured, NOT yet settled)
     const ledgerResult = await recordTransaction({
-      customerId: `cust-settle-${runId}`,
-      merchantId: `merch-settle-${runId}`,
+      customerId,
+      merchantId,
       amount: 7500,
       currency: "INR",
       provider: "mock",
@@ -459,23 +469,64 @@ export async function GET() {
     const fulfilled = settleResults.filter((r) => r.status === "fulfilled");
     const rejected = settleResults.filter((r) => r.status === "rejected");
 
+    // 3. Fetch updated transaction state & verify version and settlement state
+    const updatedTx = await getPaymentTransactionById(txId);
+    const updatedVersion = updatedTx?.version;
+    const settlementState = updatedTx?.settlementState;
+
+    // 4. Fetch ledger entries for transaction
     const entries = await getLedgerEntriesByTransaction(txId);
     const settlementEntries = entries.filter((e) =>
       e.description.startsWith("SETTLEMENT:"),
     );
+    const clearingDebits = settlementEntries.filter(
+      (e) => e.entryType === "DEBIT",
+    );
+    const merchantCredits = settlementEntries.filter(
+      (e) => e.entryType === "CREDIT",
+    );
+
+    // 5. Fetch account-level financial state & verify derived balances
+    const customerAccount = await getOrCreateLedgerAccount(
+      customerId,
+      "INR",
+      "CUSTOMER",
+    );
+    const clearingAccount = await getOrCreateClearingAccount("INR");
+    const merchantAccount = await getOrCreateLedgerAccount(
+      merchantId,
+      "INR",
+      "MERCHANT",
+    );
+
+    // Verify double-entry balance across full ledger
+    const integrity = await verifyLedgerIntegrity();
 
     const passed =
       fulfilled.length === 1 &&
       rejected.length === 99 &&
+      updatedVersion === initialVersion + 1 &&
+      settlementState === "RESOLVED" &&
+      entries.length === 4 &&
       settlementEntries.length === 2 &&
-      entries.length === 4;
+      clearingDebits.length === 1 &&
+      merchantCredits.length === 1 &&
+      clearingDebits[0].amount === 7500 &&
+      merchantCredits[0].amount === 7500 &&
+      customerAccount.totalDebits === 7500 &&
+      customerAccount.derivedBalance === -7500 &&
+      clearingAccount.totalDebits >= 7500 &&
+      clearingAccount.totalCredits >= 7500 &&
+      merchantAccount.totalCredits === 7500 &&
+      merchantAccount.derivedBalance === 7500 &&
+      integrity.valid;
 
     results.push({
       name: "OCC — 100 concurrent financial settlement attempts",
       passed,
       details: passed
-        ? `100 concurrent settlements executed: 1 winner succeeded, 99 OCC conflicts rejected, exactly 1 merchant credit (₹7,500), 0 duplicate movements (4 entries total)`
-        : `Expected 1 winner & 99 OCC conflicts with 2 settlement entries, got: ${fulfilled.length} succeeded, ${rejected.length} rejected, ${settlementEntries.length} settlement entries`,
+        ? `100 concurrent settlements executed: 1 winner succeeded, 99 OCC conflicts rejected, version bumped ${initialVersion} → ${updatedVersion}, settlementState=RESOLVED, customer=-₹7,500, clearing net=₹0, merchant=+₹7,500, exactly 4 ledger entries, ledger balanced.`
+        : `Assertion failed: fulfilled=${fulfilled.length}, rejected=${rejected.length}, version=${updatedVersion} (expected ${initialVersion + 1}), state=${settlementState}, totalEntries=${entries.length}, settlementEntries=${settlementEntries.length}, merchantBalance=${merchantAccount.derivedBalance}, balanced=${integrity.valid}`,
     });
   } catch (e: any) {
     results.push({
@@ -486,7 +537,143 @@ export async function GET() {
     });
   }
 
-  // ─── Test 12: Ledger integrity after all operations ───────────
+  // ─── Test 12: Atomic Rollback — Partial Mutation Failure Recovery ─
+  try {
+    const {
+      recordTransaction,
+      settleToMerchant,
+      getLedgerEntriesByTransaction,
+      getPaymentTransactionById,
+      verifyLedgerIntegrity,
+    } = await import("@/lib/ledger/ledger.service");
+
+    const customerId = `cust-rollback-${runId}`;
+    const merchantId = `merch-rollback-${runId}`;
+
+    const ledgerResult = await recordTransaction({
+      customerId,
+      merchantId,
+      amount: 5000,
+      currency: "INR",
+      provider: "mock",
+      providerReference: `ref-rollback-${runId}`,
+      idempotencyKey: `idem-rollback-${runId}`,
+      description: "Atomic rollback failure injection test",
+    });
+
+    const txId = ledgerResult.transaction.id;
+    const initialTx = await getPaymentTransactionById(txId);
+
+    // Inject middle-of-mutation failure: Payment updated ✓ → Clearing DEBIT ✓ → 💥 Merchant CREDIT failure
+    let threwSimulatedError = false;
+    try {
+      await settleToMerchant(txId, initialTx?.version, {
+        simulateFailureStage: "MERCHANT_CREDIT_FAIL",
+      });
+    } catch (err: unknown) {
+      threwSimulatedError =
+        err instanceof Error &&
+        err.message === "SIMULATED_MERCHANT_CREDIT_FAILURE";
+    }
+
+    const postTx = await getPaymentTransactionById(txId);
+    const postEntries = await getLedgerEntriesByTransaction(txId);
+    const postSettlementEntries = postEntries.filter((e) =>
+      e.description.startsWith("SETTLEMENT:"),
+    );
+    const integrity = await verifyLedgerIntegrity();
+
+    const passed =
+      threwSimulatedError &&
+      postTx?.version === initialTx?.version &&
+      postTx?.settlementState === initialTx?.settlementState &&
+      postSettlementEntries.length === 0 &&
+      postEntries.length === 2 &&
+      integrity.valid;
+
+    results.push({
+      name: "Atomic Rollback — Partial Mutation Failure Recovery",
+      passed,
+      details: passed
+        ? `Mid-mutation settlement failure (Clearing DEBIT ✓ → Merchant CREDIT 💥) safely caught & rolled back: payment version (${postTx?.version}) and settlementState (${postTx?.settlementState}) unchanged, 0 orphan settlement entries, ledger balanced.`
+        : `Rollback verification failed: threwError=${threwSimulatedError}, version=${postTx?.version}, settlementEntries=${postSettlementEntries.length}`,
+    });
+  } catch (e: any) {
+    results.push({
+      name: "Atomic Rollback — Partial Mutation Failure Recovery",
+      passed: false,
+      details: "Threw unexpected error",
+      error: e.message,
+    });
+  }
+
+  // ─── Test 13: Idempotency Key Reuse with Hash Mismatch Rejection ─
+  try {
+    const { IdempotencyManager } = await import("@/lib/security/idempotency");
+
+    const idempotencyKey = `idem-hash-test-${runId}`;
+    const initialParams = { customerId: "cust_1", amount: 1000, currency: "INR" };
+    const alteredParams = { customerId: "cust_1", amount: 9000, currency: "INR" };
+
+    const mockTx = {
+      id: "ptx_mock_1",
+      customerId: "cust_1",
+      merchantId: "merch_1",
+      amount: 1000,
+      currency: "INR",
+      paymentState: "SUCCESS" as const,
+      settlementState: "NOT_REQUIRED" as const,
+      provider: "mock",
+      providerReference: "ref_1",
+      idempotencyKey,
+      retryCount: 0,
+      version: 1,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Cache original result with initialParams
+    await IdempotencyManager.cacheResult(
+      idempotencyKey,
+      { transaction: mockTx, cachedAt: new Date().toISOString() },
+      initialParams,
+    );
+
+    // Query with identical params -> should succeed
+    const sameResult = await IdempotencyManager.getResult(
+      idempotencyKey,
+      initialParams,
+    );
+
+    // Query with altered params -> should throw IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_REQUEST
+    let rejectedDifferentParams = false;
+    try {
+      await IdempotencyManager.getResult(idempotencyKey, alteredParams);
+    } catch (err: unknown) {
+      rejectedDifferentParams =
+        err instanceof Error &&
+        err.message === "IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_REQUEST";
+    }
+
+    const passed = sameResult !== null && rejectedDifferentParams;
+
+    results.push({
+      name: "Idempotency Key Reuse with Hash Mismatch Rejection",
+      passed,
+      details: passed
+        ? `Identical request payload returned cached response; altered request payload with same idempotency key was correctly rejected (IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_REQUEST).`
+        : `Assertion failed: sameResult=${!!sameResult}, rejectedDifferentParams=${rejectedDifferentParams}`,
+    });
+  } catch (e: any) {
+    results.push({
+      name: "Idempotency Key Reuse with Hash Mismatch Rejection",
+      passed: false,
+      details: "Threw unexpected error",
+      error: e.message,
+    });
+  }
+
+  // ─── Test 14: Ledger integrity after all operations ───────────
   try {
     const integrity = await verifyLedgerIntegrity();
 

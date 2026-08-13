@@ -27,6 +27,8 @@ export interface OutboxEvent {
   version: number;
   createdAt: string;
   processedAt?: string;
+  leaseExpiresAt?: string;
+  providerIdempotencyKey?: string;
   error?: string;
 }
 
@@ -41,6 +43,7 @@ export async function createOutboxEvent(data: {
   aggregateId: string;
   eventType: OutboxEvent["eventType"];
   payload: Record<string, unknown>;
+  providerIdempotencyKey?: string;
 }): Promise<OutboxEvent> {
   const event: OutboxEvent = {
     id: `evt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
@@ -51,6 +54,7 @@ export async function createOutboxEvent(data: {
     retryCount: 0,
     version: 1,
     createdAt: new Date().toISOString(),
+    providerIdempotencyKey: data.providerIdempotencyKey || `p_idem_${data.aggregateId}`,
   };
 
   outboxStore.push(event);
@@ -58,23 +62,37 @@ export async function createOutboxEvent(data: {
 }
 
 /**
- * Retrieves pending outbox events for background worker processing.
+ * Retrieves pending outbox events or events with expired processing leases for recovery.
  */
 export async function getPendingOutboxEvents(
   limit = 10,
 ): Promise<OutboxEvent[]> {
+  const now = Date.now();
   return outboxStore
-    .filter((e) => e.status === "PENDING" || e.status === "FAILED")
+    .filter((e) => {
+      if (e.status === "PENDING" || e.status === "FAILED") return true;
+      if (
+        e.status === "PROCESSING" &&
+        e.leaseExpiresAt &&
+        new Date(e.leaseExpiresAt).getTime() <= now
+      ) {
+        // Stale worker lease detected — recover event
+        e.status = "PENDING";
+        return true;
+      }
+      return false;
+    })
     .slice(0, limit);
 }
 
 /**
- * Marks outbox event status after worker execution.
+ * Marks outbox event status after worker execution, managing lease expiration.
  */
 export async function updateOutboxEventStatus(
   id: string,
   status: OutboxEventStatus,
   error?: string,
+  leaseTtlSeconds = 30,
 ): Promise<OutboxEvent | null> {
   const event = outboxStore.find((e) => e.id === id);
   if (!event) return null;
@@ -82,6 +100,11 @@ export async function updateOutboxEventStatus(
   event.status = status;
   event.version += 1;
   if (error) event.error = error;
+  if (status === "PROCESSING") {
+    event.leaseExpiresAt = new Date(Date.now() + leaseTtlSeconds * 1000).toISOString();
+  } else {
+    delete event.leaseExpiresAt;
+  }
   if (status === "PROCESSED") event.processedAt = new Date().toISOString();
 
   return event;

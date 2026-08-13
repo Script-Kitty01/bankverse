@@ -189,7 +189,10 @@ export class PaymentOrchestrator {
       );
 
       // Step 3b: Settle from clearing to merchant
-      await settleToMerchant(ledgerResult.transaction.id);
+      await settleToMerchant(
+        ledgerResult.transaction.id,
+        updatedTx?.version ?? ledgerResult.transaction.version,
+      );
 
       const finalTx = updatedTx || ledgerResult.transaction;
 
@@ -236,7 +239,10 @@ export class PaymentOrchestrator {
           ledgerResult.transaction.version ?? 1,
         );
 
-        await settleToMerchant(ledgerResult.transaction.id);
+        await settleToMerchant(
+          ledgerResult.transaction.id,
+          updatedTx?.version ?? ledgerResult.transaction.version,
+        );
 
         return {
           success: true,
