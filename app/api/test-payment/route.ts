@@ -673,7 +673,93 @@ export async function GET() {
     });
   }
 
-  // ─── Test 14: Ledger integrity after all operations ───────────
+  // ─── Test 14: Unified Webhook Ingestion & Deduplication ────────
+  try {
+    const { POST: webhookPOST } = await import(
+      "@/app/api/webhooks/payment-provider/route"
+    );
+    const { recordTransaction, getPaymentTransactionById } = await import(
+      "@/lib/ledger/ledger.service"
+    );
+
+    const webhookOrderRef = `wh_ord_${runId}`;
+    const ledgerResult = await recordTransaction({
+      customerId: `cust-wh-${runId}`,
+      merchantId: `merch-wh-${runId}`,
+      amount: 4200,
+      currency: "INR",
+      provider: "mock",
+      providerReference: webhookOrderRef,
+      providerOrderId: webhookOrderRef,
+      idempotencyKey: `idem-wh-${runId}`,
+      description: "Webhook pipeline verification test",
+    });
+
+    const eventId = `evt_wh_${runId}`;
+    const webhookPayload = JSON.stringify({
+      eventId,
+      provider: "mock",
+      eventType: "payment.captured",
+      providerOrderId: webhookOrderRef,
+      providerPaymentId: `pay_wh_${runId}`,
+      amount: 4200,
+      currency: "INR",
+      timestamp: new Date().toISOString(),
+    });
+
+    const mockRequest1 = new Request(
+      "http://localhost:3000/api/webhooks/payment-provider",
+      {
+        method: "POST",
+        body: webhookPayload,
+        headers: { "content-type": "application/json" },
+      },
+    );
+
+    // Call 1: Should process webhook successfully
+    const res1 = await webhookPOST(mockRequest1 as any);
+    const body1 = await res1.json();
+
+    const updatedTx = await getPaymentTransactionById(
+      ledgerResult.transaction.id,
+    );
+
+    // Call 2: Duplicate webhook delivery -> should be deduplicated
+    const mockRequest2 = new Request(
+      "http://localhost:3000/api/webhooks/payment-provider",
+      {
+        method: "POST",
+        body: webhookPayload,
+        headers: { "content-type": "application/json" },
+      },
+    );
+    const res2 = await webhookPOST(mockRequest2 as any);
+    const body2 = await res2.json();
+
+    const passed =
+      body1.success === true &&
+      body1.status === "PROCESSED" &&
+      updatedTx?.paymentState === "SUCCESS" &&
+      body2.success === true &&
+      body2.status === "DUPLICATE";
+
+    results.push({
+      name: "Unified Webhook Ingestion & Deduplication Pipeline",
+      passed,
+      details: passed
+        ? `Webhook event captured payment & triggered settlement (state=${updatedTx?.paymentState}); duplicate delivery was correctly deduplicated (status=DUPLICATE).`
+        : `Assertion failed: res1=${JSON.stringify(body1)}, res2=${JSON.stringify(body2)}`,
+    });
+  } catch (e: unknown) {
+    results.push({
+      name: "Unified Webhook Ingestion & Deduplication Pipeline",
+      passed: false,
+      details: "Threw unexpected error",
+      error: (e as Error).message,
+    });
+  }
+
+  // ─── Test 15: Ledger integrity after all operations ───────────
   try {
     const integrity = await verifyLedgerIntegrity();
 

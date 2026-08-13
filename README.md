@@ -215,12 +215,12 @@ Open [http://localhost:3000](http://localhost:3000).
 ### 4. Run the Verification Test Suite
 
 ```bash
-# Run all 45 automated verification checks
+# Run all 46 automated verification checks
 npm test
 
 # Or via HTTP endpoints when server is running
 curl http://localhost:3000/api/test-ledger          # Phase 1: 7 tests
-curl http://localhost:3000/api/test-payment         # Phase 2: 14 tests (incl. OCC settlement race, atomic rollback & idempotency hash validation)
+curl http://localhost:3000/api/test-payment         # Phase 2: 15 tests (incl. OCC settlement race, atomic rollback & webhook deduplication)
 curl http://localhost:3000/api/test-reconciliation  # Phase 3: 7 tests
 curl http://localhost:3000/api/test-chaos           # Phase 4: 9 tests
 curl http://localhost:3000/api/test-operations      # Phase 5: 7 tests
@@ -357,12 +357,12 @@ bankverse/
 
 ## 🧪 Test Suite
 
-BankVerse ships with **45 automated verification checks** across 6 phases (runnable via `npm test`):
+BankVerse ships with **46 automated verification checks** across 6 phases (runnable via `npm test`):
 
 | Phase | Endpoint                         | Tests | What it verifies                                                                                                                                 |
 | ----- | -------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 1     | `/api/test-ledger`               | 7     | Double-entry recording, idempotency, reversals, derived balances, integrity                                                                      |
-| 2     | `/api/test-payment`              | 14    | State machine transitions, mock provider, payment flow, refunds, OCC state race, OCC settlement race, atomic rollback & idempotency payload hash verification |
+| 2     | `/api/test-payment`              | 15    | State machine transitions, mock provider, payment flow, refunds, OCC state race, OCC settlement race, atomic rollback & webhook deduplication |
 | 3     | `/api/test-reconciliation`       | 7     | Internal/external matching, mismatch detection, evidence generation                                                                              |
 | 4     | `/api/test-chaos`                | 9     | Provider timeout, amount mismatch, duplicate charge, missing credit, webhook disorder, provider down, bulk mismatch, crash recovery, refund race |
 | 5     | `/api/test-operations`           | 7     | Incident detection, reconciliation incidents, operations snapshot, incident lifecycle, API endpoint, provider health, incident correlation       |

@@ -70,3 +70,6 @@ export const RECONCILIATION_ITEMS_COLLECTION_ID =
   "reconciliation_items";
 export const INCIDENTS_COLLECTION_ID =
   process.env.NEXT_PUBLIC_APPWRITE_INCIDENTS_COLLECTION_ID || "incidents";
+export const OUTBOX_EVENTS_COLLECTION_ID =
+  process.env.NEXT_PUBLIC_APPWRITE_OUTBOX_EVENTS_COLLECTION_ID ||
+  "outbox_events";
