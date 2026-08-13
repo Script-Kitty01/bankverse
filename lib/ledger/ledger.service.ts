@@ -34,7 +34,6 @@ import {
   getLedgerEntriesByTransaction,
   getLedgerEntriesByAccount,
   getAllLedgerEntries,
-  runWithEntityLock,
 } from "./repository";
 import {
   validatePaymentEntries,
