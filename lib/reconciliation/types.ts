@@ -61,6 +61,7 @@ export interface ReconciliationItem {
   matchStatus: MatchStatus;
   mismatchType?: MismatchType;
   matchMethod: MatchMethod;
+  confidence?: number;
   difference: number; // internalAmount - externalAmount
   notes?: string;
   resolvedAt?: string;

@@ -92,7 +92,12 @@ export class ReconciliationMatcher {
 
       if (fuzzyResult.match) {
         matchedExternal.add(fuzzyResult.match.reference);
-        const result = this.buildMatchResult(tx, fuzzyResult.match, "FUZZY");
+        const result = this.buildMatchResult(
+          tx,
+          fuzzyResult.match,
+          "FUZZY",
+          fuzzyResult.confidence,
+        );
         items.push(this.buildItem(tx, fuzzyResult.match, runId, result));
         continue;
       }
@@ -132,7 +137,7 @@ export class ReconciliationMatcher {
         status: item.matchStatus,
         mismatchType: item.mismatchType,
         method: item.matchMethod,
-        confidence: 0,
+        confidence: item.confidence ?? 0,
       });
     });
 
@@ -148,6 +153,7 @@ export class ReconciliationMatcher {
   ): {
     match: ExternalRecord | null;
     ambiguous: boolean;
+    confidence: number;
     candidates: ExternalRecord[];
   } {
     const txTime = new Date(tx.createdAt).getTime();
@@ -212,7 +218,7 @@ export class ReconciliationMatcher {
     }
 
     if (candidates.length === 0) {
-      return { match: null, ambiguous: false, candidates: [] };
+      return { match: null, ambiguous: false, confidence: 0, candidates: [] };
     }
 
     // Sort by confidence descending
@@ -226,6 +232,7 @@ export class ReconciliationMatcher {
       return {
         match: null,
         ambiguous: true,
+        confidence: 0,
         candidates: candidates.map((c) => c.ext),
       };
     }
@@ -233,6 +240,7 @@ export class ReconciliationMatcher {
     return {
       match: candidates[0].ext,
       ambiguous: false,
+      confidence: candidates[0].confidence,
       candidates: candidates.map((c) => c.ext),
     };
   }
@@ -241,6 +249,7 @@ export class ReconciliationMatcher {
     tx: PaymentTransaction | null,
     ext: ExternalRecord | null,
     method: MatchMethod,
+    overrideConfidence?: number,
   ): {
     status: MatchStatus;
     mismatchType?: MismatchType;
@@ -286,7 +295,12 @@ export class ReconciliationMatcher {
     return {
       status: method === "EXACT" ? "MATCHED_EXACT" : "MATCHED_FUZZY",
       method,
-      confidence: method === "EXACT" ? 1 : 0.9,
+      confidence:
+        overrideConfidence !== undefined
+          ? overrideConfidence
+          : method === "EXACT"
+            ? 1
+            : 0.9,
     };
   }
 
@@ -313,6 +327,7 @@ export class ReconciliationMatcher {
       matchStatus: result.status,
       mismatchType: result.mismatchType,
       matchMethod: result.method,
+      confidence: result.confidence,
       difference: (tx?.amount || 0) - (ext?.amount || 0),
     };
   }
