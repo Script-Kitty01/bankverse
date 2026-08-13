@@ -41,7 +41,7 @@ graph TD
 - **Goal**: Guarantee ledger double-entry balance under all success and failure conditions.
 - **Key Changes**:
   - Implement three-legged booking:
-    1. **Authorization/Capture**: Debit Customer $\rightarrow$ Credit Clearing Suspense Account.
+    1. **After Capture Confirmed**: Debit Customer $\rightarrow$ Credit Clearing Suspense Account. (Ledger booking occurs only after confirmed provider capture).
     2. **Settlement**: Debit Clearing Suspense Account $\rightarrow$ Credit Merchant.
     3. **Failure/Reversal**: Debit Clearing Suspense Account $\rightarrow$ Credit Customer.
   - Enforce invariant: Merchant account is **never credited** until external capture is confirmed.
