@@ -223,18 +223,17 @@ export async function updateAccountAggregates(
     }
 
     const db = getDb();
-    if (expectedVersion !== undefined) {
-      const existingDoc = await db.getDocument(
-        DATABASE_ID,
-        LEDGER_ACCOUNTS_COLLECTION_ID,
-        accountId,
+    const currentDoc = await db.getDocument(
+      DATABASE_ID,
+      LEDGER_ACCOUNTS_COLLECTION_ID,
+      accountId,
+    );
+    const currentVersion = currentDoc.version ?? 1;
+
+    if (expectedVersion !== undefined && currentVersion !== expectedVersion) {
+      throw new Error(
+        `OCC Conflict: Account ${accountId} version mismatch. Expected ${expectedVersion}, got ${currentVersion}`,
       );
-      const currentVersion = existingDoc.version ?? 1;
-      if (currentVersion !== expectedVersion) {
-        throw new Error(
-          `OCC Conflict: Account ${accountId} version mismatch. Expected ${expectedVersion}, got ${currentVersion}`,
-        );
-      }
     }
 
     const entries = await db.listDocuments(
@@ -250,12 +249,7 @@ export async function updateAccountAggregates(
       else if (doc.entryType === "CREDIT") totalCredits += doc.amount;
     }
 
-    const currentDoc = await db.getDocument(
-      DATABASE_ID,
-      LEDGER_ACCOUNTS_COLLECTION_ID,
-      accountId,
-    );
-    const nextVersion = (currentDoc.version ?? 1) + 1;
+    const nextVersion = currentVersion + 1;
 
     const doc = await db.updateDocument(
       DATABASE_ID,
@@ -494,28 +488,20 @@ export async function updatePaymentTransactionState(
     }
 
     const db = getDb();
-
-    // OCC Check in Appwrite/DB mode
-    if (expectedVersion !== undefined) {
-      const existingDoc = await db.getDocument(
-        DATABASE_ID,
-        PAYMENT_TRANSACTIONS_COLLECTION_ID,
-        id,
-      );
-      const currentVersion = existingDoc.version ?? 1;
-      if (currentVersion !== expectedVersion) {
-        throw new Error(
-          `OCC Conflict: Transaction ${id} version mismatch. Expected ${expectedVersion}, got ${currentVersion}`,
-        );
-      }
-    }
-
     const currentDoc = await db.getDocument(
       DATABASE_ID,
       PAYMENT_TRANSACTIONS_COLLECTION_ID,
       id,
     );
-    const nextVersion = (currentDoc.version ?? 1) + 1;
+    const currentVersion = currentDoc.version ?? 1;
+
+    if (expectedVersion !== undefined && currentVersion !== expectedVersion) {
+      throw new Error(
+        `OCC Conflict: Transaction ${id} version mismatch. Expected ${expectedVersion}, got ${currentVersion}`,
+      );
+    }
+
+    const nextVersion = currentVersion + 1;
 
     const updateData: Record<string, unknown> = {
       paymentState,
