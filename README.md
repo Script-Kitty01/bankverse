@@ -35,7 +35,9 @@
 
 ## 💡 Why BankVerse
 
-Payment failures cost businesses **2-5% of revenue** in lost customers, manual reconciliation, and compliance penalties. Most banking apps treat failures as exceptions. BankVerse treats them as **expected events** and builds the infrastructure to detect, contain, and recover from them automatically.
+**What happens when a payment provider says "success", your system says "failure", and money is somewhere in between?**
+
+Payment failures cost businesses **2-5% of revenue** in lost customers, manual reconciliation, and compliance penalties. Most banking apps treat failures as exceptions. BankVerse treats them as **expected events** and builds the infrastructure to detect, contain, and recover from them automatically using a three-legged clearing model and optimistic concurrency control.
 
 | Problem                                                | BankVerse Solution                                                                                                                                                        |
 | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

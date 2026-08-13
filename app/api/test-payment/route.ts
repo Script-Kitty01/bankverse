@@ -349,14 +349,23 @@ export async function GET() {
     const fulfilled = raceResults.filter((r) => r.status === "fulfilled");
     const rejected = raceResults.filter((r) => r.status === "rejected");
 
-    const passed = fulfilled.length === 1 && rejected.length === 99;
+    const { getPaymentTransactionById } = await import(
+      "@/lib/ledger/ledger.service"
+    );
+    const finalTx = await getPaymentTransactionById(txId);
+    const expectedFinalVersion = initialVersion + 1;
+
+    const passed =
+      fulfilled.length === 1 &&
+      rejected.length === 99 &&
+      finalTx?.version === expectedFinalVersion;
 
     results.push({
       name: "OCC — 100 concurrent state transitions",
       passed,
       details: passed
-        ? `100 concurrent transitions executed: 1 winner succeeded, 99 OCC conflicts rejected`
-        : `Expected 1 winner & 99 conflicts, got: ${fulfilled.length} succeeded, ${rejected.length} rejected`,
+        ? `100 concurrent transitions executed: 1 winner succeeded, 99 OCC conflicts rejected (final version=${finalTx?.version})`
+        : `Expected 1 winner & 99 conflicts (version=${expectedFinalVersion}), got: ${fulfilled.length} succeeded, ${rejected.length} rejected, final version=${finalTx?.version}`,
     });
   } catch (e: any) {
     results.push({

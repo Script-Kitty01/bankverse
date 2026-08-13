@@ -150,9 +150,9 @@ export async function recordTransaction(
     description: `${description} — credit to clearing (pending settlement to ${merchantId})`,
   });
 
-  // 6. Update account aggregates
-  await updateAccountAggregates(customerAccount.id);
-  await updateAccountAggregates(clearingAccount.id);
+  // 6. Update account aggregates with OCC expectedVersion
+  await updateAccountAggregates(customerAccount.id, customerAccount.version);
+  await updateAccountAggregates(clearingAccount.id, clearingAccount.version);
 
   return { transaction, debitEntry, creditEntry };
 }
@@ -212,8 +212,8 @@ export async function settleToMerchant(
     description: `SETTLEMENT: credit to ${transaction.merchantId}`,
   });
 
-  await updateAccountAggregates(clearingAccount.id);
-  await updateAccountAggregates(merchantAccount.id);
+  await updateAccountAggregates(clearingAccount.id, clearingAccount.version);
+  await updateAccountAggregates(merchantAccount.id, merchantAccount.version);
 
   return { debitEntry: settlementDebit, creditEntry: settlementCredit };
 }
@@ -273,8 +273,8 @@ export async function reverseFromClearing(
     description: `REVERSAL: ${reason} — credit back to ${transaction.customerId}`,
   });
 
-  await updateAccountAggregates(clearingAccount.id);
-  await updateAccountAggregates(customerAccount.id);
+  await updateAccountAggregates(clearingAccount.id, clearingAccount.version);
+  await updateAccountAggregates(customerAccount.id, customerAccount.version);
 
   return { debitEntry: reversalDebit, creditEntry: reversalCredit };
 }
@@ -356,8 +356,8 @@ async function reverseSettledTransaction(
     description: `REVERSAL: ${reason} — credit to customer ${transaction.customerId}`,
   });
 
-  await updateAccountAggregates(merchantAccount.id);
-  await updateAccountAggregates(customerAccount.id);
+  await updateAccountAggregates(merchantAccount.id, merchantAccount.version);
+  await updateAccountAggregates(customerAccount.id, customerAccount.version);
 
   return { debitEntry: reversalDebit, creditEntry: reversalCredit };
 }
