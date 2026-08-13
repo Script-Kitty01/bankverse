@@ -359,6 +359,29 @@ export async function getPaymentTransactionByIdempotencyKey(
   return mapDocToTransaction(result.documents[0]);
 }
 
+export async function getPaymentTransactionByProviderOrderId(
+  providerOrderId: string,
+): Promise<PaymentTransaction | null> {
+  if (isDemoMode()) {
+    return (
+      demoStore.paymentTransactions.find(
+        (t) => t.providerOrderId === providerOrderId,
+      ) ?? null
+    );
+  }
+
+  const db = getDb();
+  const result = await db.listDocuments(
+    DATABASE_ID,
+    PAYMENT_TRANSACTIONS_COLLECTION_ID,
+    [Query.equal("providerOrderId", providerOrderId), Query.limit(1)],
+  );
+
+  if (result.documents.length === 0) return null;
+
+  return mapDocToTransaction(result.documents[0]);
+}
+
 export async function updatePaymentTransactionState(
   id: string,
   paymentState: PaymentTransaction["paymentState"],

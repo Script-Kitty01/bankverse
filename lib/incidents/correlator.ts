@@ -20,7 +20,8 @@ import type { PaymentIncident, IncidentSeverity } from "./detector";
 export interface CorrelationKey {
   provider: string;
   mismatchType: string;
-  timeWindow: string; // ISO timestamp truncated to 5-min bucket
+  /** ISO timestamp of the incident (used for sliding-window comparison) */
+  detectedAt: string;
   paymentMethod?: string;
   bank?: string;
 }
@@ -39,7 +40,23 @@ export interface CorrelationResult {
 const TIME_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
 
 /**
+ * Check if two timestamps fall within the same sliding 5-minute window.
+ * Unlike hard bucket truncation, this uses true sliding windows:
+ * incidents at 10:04 and 10:06 ARE correlated (2 min apart),
+ * while incidents at 10:00 and 10:06 are NOT (6 min apart).
+ */
+export function withinTimeWindow(
+  timestampA: string,
+  timestampB: string,
+): boolean {
+  const a = new Date(timestampA).getTime();
+  const b = new Date(timestampB).getTime();
+  return Math.abs(a - b) <= TIME_WINDOW_MS;
+}
+
+/**
  * Truncate a timestamp to the nearest 5-minute bucket.
+ * @deprecated Use withinTimeWindow() for correlation; kept for display purposes.
  */
 export function getTimeWindow(isoTimestamp: string): string {
   const date = new Date(isoTimestamp);
@@ -63,7 +80,7 @@ export function buildCorrelationKey(params: {
   return {
     provider: params.provider,
     mismatchType: params.mismatchType,
-    timeWindow: getTimeWindow(params.detectedAt),
+    detectedAt: params.detectedAt,
     paymentMethod: params.paymentMethod,
     bank: params.bank,
   };
@@ -71,12 +88,15 @@ export function buildCorrelationKey(params: {
 
 /**
  * Compare two correlation keys for equality.
+ * Uses sliding time windows: two incidents correlate if they share
+ * provider + mismatchType + paymentMethod + bank AND their timestamps
+ * are within 5 minutes of each other (not just same hard bucket).
  */
 export function keysMatch(a: CorrelationKey, b: CorrelationKey): boolean {
   return (
     a.provider === b.provider &&
     a.mismatchType === b.mismatchType &&
-    a.timeWindow === b.timeWindow &&
+    withinTimeWindow(a.detectedAt, b.detectedAt) &&
     (a.paymentMethod ?? "") === (b.paymentMethod ?? "") &&
     (a.bank ?? "") === (b.bank ?? "")
   );
@@ -240,7 +260,7 @@ export class IncidentCorrelator {
       bank: incident.bank,
     });
 
-    const baseTime = new Date(baseKey.timeWindow).getTime();
+    const baseTime = new Date(baseKey.detectedAt).getTime();
 
     return allIncidents.filter((other) => {
       if (other.id === incident.id) return false;
@@ -256,7 +276,7 @@ export class IncidentCorrelator {
         bank: other.bank,
       });
 
-      const otherTime = new Date(otherKey.timeWindow).getTime();
+      const otherTime = new Date(otherKey.detectedAt).getTime();
       const windowDiff = Math.abs(otherTime - baseTime) / TIME_WINDOW_MS;
 
       return (

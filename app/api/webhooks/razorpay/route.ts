@@ -169,14 +169,10 @@ export async function POST(request: Request) {
       );
     }
 
-    // Find the internal transaction by provider reference (orderId)
-    const { getAllPaymentTransactions } =
+    // Find the internal transaction by provider order ID (indexed lookup)
+    const { getPaymentTransactionByProviderOrderId } =
       await import("@/lib/ledger/ledger.service");
-    const allTxs = await getAllPaymentTransactions(1000);
-    const transaction = allTxs.find(
-      (tx) =>
-        tx.providerReference === orderId || tx.providerOrderId === orderId,
-    );
+    const transaction = await getPaymentTransactionByProviderOrderId(orderId);
 
     if (!transaction) {
       await logAuditEvent("WEBHOOK_UNKNOWN_TRANSACTION", "system", {

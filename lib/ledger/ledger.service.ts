@@ -425,6 +425,7 @@ export async function verifyLedgerIntegrity(): Promise<{
 
 export { getPaymentTransactionById } from "./repository";
 export { getPaymentTransactionByIdempotencyKey } from "./repository";
+export { getPaymentTransactionByProviderOrderId } from "./repository";
 export { getLedgerEntriesByTransaction } from "./repository";
 export { updatePaymentTransactionState } from "./repository";
 export { getAllPaymentTransactions } from "./repository";
