@@ -27,6 +27,7 @@ import {
   getPaymentTransactionByIdempotencyKey,
   runWithEntityLock,
 } from "@/lib/ledger/ledger.service";
+import { IdempotencyManager } from "@/lib/security/idempotency";
 import type { PaymentTransaction } from "@/lib/ledger/types";
 
 // ─── Types ──────────────────────────────────────────────────────
@@ -186,9 +187,17 @@ export class PaymentOrchestrator {
         // Step 3b: Settle from clearing to merchant
         await settleToMerchant(ledgerResult.transaction.id);
 
+        const finalTx = updatedTx || ledgerResult.transaction;
+
+        // Cache result in Tier 1 (Redis) & Tier 2 (DB) Idempotency Layer
+        await IdempotencyManager.cacheResult(idempotencyKey, {
+          transaction: finalTx,
+          cachedAt: new Date().toISOString(),
+        });
+
         return {
           success: true,
-          transaction: updatedTx || ledgerResult.transaction,
+          transaction: finalTx,
           orderId: orderResult.orderId,
           paymentId: captureResult.paymentId,
         };
