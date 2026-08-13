@@ -96,34 +96,31 @@ graph TB
     SCENARIOS --> MATCHER
 ```
 
-### The DEBIT_WITHOUT_CREDIT Lifecycle
+### The Clearing Account & Settlement Lifecycle
 
-The most dangerous payment failure: customer is debited but merchant is never credited. Here's how BankVerse handles it end-to-end:
+To guarantee that a merchant is **never credited before provider capture is confirmed**, BankVerse uses a three-legged booking model through a system Clearing account (`system:clearing`):
 
 ```mermaid
 sequenceDiagram
     actor C as Customer
     participant P as Payment Orchestrator
     participant L as Double-Entry Ledger
+    participant M as Merchant
     participant R as Reconciliation Engine
     participant I as Incident Detector
-    participant O as Operations Dashboard
 
     C->>P: Pay ₹7,500
-    P->>L: Record DEBIT (customer -₹7,500)
-    Note over L: ❌ CREDIT never arrives<br/>(provider webhook delayed)
-
-    R->>L: Fetch internal entries
-    R->>R: Match vs provider records
-    R->>I: DEBIT_WITHOUT_CREDIT detected
-    I->>I: Create CRITICAL incident
-    I->>O: Show on dashboard
-
-    Note over O: Operator sees incident
-    O->>L: Initiate compensating CREDIT
-    L->>L: CREDIT customer +₹7,500
-    L->>L: SUM(debits) === SUM(credits) ✅
-    O->>I: Resolve incident
+    P->>P: Verify & Capture with Provider
+    alt Capture Confirmed
+        P->>L: Record DEBIT Customer, CREDIT Clearing
+        Note over L: Customer: -₹7,500 | Clearing: +₹7,500
+        P->>L: Settle DEBIT Clearing, CREDIT Merchant
+        Note over L: Clearing: ₹0 | Merchant: +₹7,500
+    else Capture Failed or Unsettled
+        P->>L: Reverse DEBIT Clearing, CREDIT Customer
+        Note over L: Customer refunded | Merchant never credited
+        R->>I: Detect DEBIT_WITHOUT_MERCHANT_SETTLEMENT
+    end
 ```
 
 ---
@@ -185,9 +182,9 @@ Open [http://localhost:3000](http://localhost:3000).
 ### 4. Run the Test Suite
 
 ```bash
-# All 38 tests across 6 phases
+# All 39 tests across 6 phases
 curl http://localhost:3000/api/test-ledger          # Phase 1: 7 tests
-curl http://localhost:3000/api/test-payment         # Phase 2: 9 tests
+curl http://localhost:3000/api/test-payment         # Phase 2: 10 tests
 curl http://localhost:3000/api/test-reconciliation  # Phase 3: 7 tests
 curl http://localhost:3000/api/test-chaos           # Phase 4: 8 tests
 curl http://localhost:3000/api/test-operations      # Phase 5: 7 tests
@@ -311,12 +308,12 @@ bankverse/
 
 ## 🧪 Test Suite
 
-BankVerse ships with **38 automated tests** across 6 phases:
+BankVerse ships with **39 automated tests** across 6 phases:
 
 | Phase | Endpoint                         | Tests | What it verifies                                                                                                                           |
 | ----- | -------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | 1     | `/api/test-ledger`               | 7     | Double-entry recording, idempotency, reversals, derived balances, integrity                                                                |
-| 2     | `/api/test-payment`              | 9     | State machine transitions, mock provider, full payment flow, refunds                                                                       |
+| 2     | `/api/test-payment`              | 10    | State machine transitions, mock provider, full payment flow, refunds, 100 concurrent OCC race test                                        |
 | 3     | `/api/test-reconciliation`       | 7     | Internal/external matching, mismatch detection, evidence generation                                                                        |
 | 4     | `/api/test-chaos`                | 8     | Provider timeout, amount mismatch, duplicate charge, missing credit, webhook disorder, provider down, bulk mismatch, refund race condition |
 | 5     | `/api/test-operations`           | 7     | Incident detection, reconciliation incidents, operations snapshot, incident lifecycle, API endpoint, provider health, incident correlation |

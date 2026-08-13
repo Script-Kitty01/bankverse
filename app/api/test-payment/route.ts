@@ -8,7 +8,10 @@ import { NextResponse } from "next/server";
 import { PaymentOrchestrator } from "@/lib/payment/orchestrator";
 import { PaymentStateMachine } from "@/lib/payment/state-machine";
 import { MockPaymentProvider } from "@/lib/payment/mock.provider";
-import { verifyLedgerIntegrity } from "@/lib/ledger/ledger.service";
+import {
+  updatePaymentTransactionState,
+  verifyLedgerIntegrity,
+} from "@/lib/ledger/ledger.service";
 
 interface TestResult {
   name: string;
@@ -308,7 +311,63 @@ export async function GET() {
     });
   }
 
-  // ─── Test 9: Ledger integrity after all operations ────────────
+  // ─── Test 9: OCC — 100 concurrent state transitions ───────────
+  try {
+    const orchestrator = new PaymentOrchestrator({
+      maxRetries: 1,
+      retryDelayMs: 10,
+    });
+
+    const initial = await orchestrator.processPayment({
+      customerId: `cust-occ-${runId}`,
+      merchantId: `merch-occ-${runId}`,
+      amount: 500,
+      currency: "INR",
+      method: "upi",
+      description: "OCC race test",
+    });
+
+    if (!initial.success || !initial.transaction) {
+      throw new Error("Precondition failed: OCC initial payment failed");
+    }
+
+    const txId = initial.transaction.id;
+    const initialVersion = initial.transaction.version ?? 1;
+
+    // Fire 100 concurrent update requests with the exact same expectedVersion
+    const promises = Array.from({ length: 100 }, (_, i) =>
+      updatePaymentTransactionState(
+        txId,
+        "SUCCESS",
+        "PENDING_RECONCILIATION",
+        { retryCount: i + 1 },
+        initialVersion,
+      ),
+    );
+
+    const raceResults = await Promise.allSettled(promises);
+    const fulfilled = raceResults.filter((r) => r.status === "fulfilled");
+    const rejected = raceResults.filter((r) => r.status === "rejected");
+
+    const passed = fulfilled.length === 1 && rejected.length === 99;
+
+    results.push({
+      name: "OCC — 100 concurrent state transitions",
+      passed,
+      details: passed
+        ? `100 concurrent transitions executed: 1 winner succeeded, 99 OCC conflicts rejected`
+        : `Expected 1 winner & 99 conflicts, got: ${fulfilled.length} succeeded, ${rejected.length} rejected`,
+    });
+  } catch (e: any) {
+    results.push({
+      name: "OCC — 100 concurrent state transitions",
+      passed: false,
+      details: "Threw unexpected error",
+      error: e.message,
+    });
+  }
+
+  // ─── Test 10: Ledger integrity after all operations ───────────
   try {
     const integrity = await verifyLedgerIntegrity();
 

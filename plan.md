@@ -48,7 +48,7 @@ graph TD
   - Re-label legacy $DEBIT\_WITHOUT\_CREDIT$ concept to $DEBIT\_WITHOUT\_MERCHANT\_SETTLEMENT$ to reflect balanced Clearing Account semantics.
 - **Invariants Verified**:
   - $\sum \text{debits} - \sum \text{credits} = 0$ across all accounts at all times.
-  - Incomplete/failed transactions leave customer funds in Clearing before automated reversal.
+  - If BankVerse has already booked customer funds into Clearing and settlement subsequently fails, those funds remain in Clearing until an explicit reversal moves them back to the customer.
 
 ---
 
