@@ -11,7 +11,7 @@
  * POST /api/webhooks/payment-provider
  */
 
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import crypto from "crypto";
 import {
   updatePaymentTransactionState,
@@ -89,7 +89,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const { eventId, provider, eventType, providerOrderId, providerPaymentId } = payload;
+  const { eventId, eventType, providerOrderId, providerPaymentId } = payload;
 
   if (!eventId || !providerOrderId) {
     return NextResponse.json(

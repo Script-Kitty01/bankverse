@@ -2,11 +2,11 @@
 
 <img src="public/icons/logo.svg" alt="BankVerse Logo" width="120" />
 
-# 🛡️ BankVerse — Payment Reliability Platform
+# 🛡️ BankVerse — Payment Reliability & Settlement System
 
-### _BankVerse reduces the operational cost and customer impact of payment failures._
+### _What happens when a payment provider says "success", your system says "failure", and money is somewhere in between?_
 
-**Double-entry ledger • Automated reconciliation • Chaos engineering • Incident management**
+**Double-entry ledger • Three-legged clearing • Optimistic concurrency • Automated reconciliation • Chaos lab**
 
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
