@@ -2,15 +2,19 @@
  * BankVerse — Razorpay Webhook Handler
  *
  * Receives payment events from Razorpay and updates internal state.
- * In demo mode, simulates webhook processing.
+ * Features:
+ *   - HMAC-SHA256 signature verification (real, not stubbed)
+ *   - Webhook idempotency (eventId deduplication)
+ *   - State machine validation
  *
  * POST /api/webhooks/razorpay
  */
 
 import { NextResponse } from "next/server";
+import crypto from "crypto";
 import { updatePaymentTransactionState } from "@/lib/ledger/ledger.service";
 import { PaymentStateMachine } from "@/lib/payment/state-machine";
-import { getPaymentTransactionById } from "@/lib/ledger/ledger.service";
+import type { PaymentState } from "@/lib/ledger/types";
 import { logAuditEvent } from "@/lib/security/audit";
 
 // ─── Webhook Payload Types ──────────────────────────────────────
@@ -43,6 +47,27 @@ interface RazorpayWebhookPayload {
   };
 }
 
+// ─── Webhook Event Store (Idempotency) ──────────────────────────
+
+interface WebhookEventRecord {
+  eventId: string;
+  provider: string;
+  receivedAt: string;
+  processedAt?: string;
+  status: "PENDING" | "PROCESSED" | "DUPLICATE";
+  payloadHash: string;
+}
+
+// In-memory store for demo mode; use Appwrite in production
+const webhookEventStore = new Map<string, WebhookEventRecord>();
+
+function hashPayload(payload: unknown): string {
+  return crypto
+    .createHash("sha256")
+    .update(JSON.stringify(payload))
+    .digest("hex");
+}
+
 // ─── Webhook Event → Payment State Mapping ──────────────────────
 
 const EVENT_TO_PAYMENT_STATE: Record<string, string> = {
@@ -51,30 +76,93 @@ const EVENT_TO_PAYMENT_STATE: Record<string, string> = {
   "payment.failed": "FAILED",
 };
 
+// ─── Signature Verification ─────────────────────────────────────
+
+function verifyWebhookSignature(
+  rawBody: string,
+  signature: string,
+  secret: string,
+): boolean {
+  if (!signature || !secret) return false;
+  try {
+    const expected = crypto
+      .createHmac("sha256", secret)
+      .update(rawBody)
+      .digest("hex");
+    return crypto.timingSafeEqual(
+      Buffer.from(expected),
+      Buffer.from(signature),
+    );
+  } catch {
+    return false;
+  }
+}
+
 // ─── Handler ────────────────────────────────────────────────────
 
 export async function POST(request: Request) {
   try {
+    // Clone request to read raw body for signature verification
+    const rawBody = await request.text();
     const signature = request.headers.get("x-razorpay-signature") || "";
-    const body = await request.json() as RazorpayWebhookPayload;
 
-    // In demo mode, skip signature verification
+    // ── Signature Verification ──────────────────────────────────
+    const webhookSecret =
+      process.env.RAZORPAY_WEBHOOK_SECRET ||
+      process.env.RAZORPAY_KEY_SECRET ||
+      "";
+
     if (process.env.NEXT_PUBLIC_DEMO_MODE !== "true") {
       // Production: verify webhook signature
-      // const isValid = verifyWebhookSignature(body, signature);
-      // if (!isValid) {
-      //   return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
-      // }
+      if (!verifyWebhookSignature(rawBody, signature, webhookSecret)) {
+        await logAuditEvent("WEBHOOK_INVALID_SIGNATURE", "system", {
+          signaturePrefix: signature.slice(0, 8) + "...",
+        });
+        return NextResponse.json(
+          { error: "Invalid signature" },
+          { status: 401 },
+        );
+      }
     }
 
-    const { event, payload } = body;
+    const body = JSON.parse(rawBody) as RazorpayWebhookPayload;
+    const { event, payload: webhookPayload } = body;
 
-    // Extract transaction reference from order receipt
-    const orderId = payload.order?.entity?.id || payload.payment?.entity?.order_id;
-    const paymentId = payload.payment?.entity?.id;
-    const paymentStatus = payload.payment?.entity?.status;
+    // ── Idempotency Check ───────────────────────────────────────
+    const eventId =
+      request.headers.get("x-razorpay-event-id") ||
+      `${event}_${webhookPayload.payment?.entity?.id || webhookPayload.order?.entity?.id}_${Date.now()}`;
+
+    const existingEvent = webhookEventStore.get(eventId);
+    if (existingEvent && existingEvent.status === "PROCESSED") {
+      return NextResponse.json({
+        success: true,
+        message: `Event ${eventId} already processed (idempotent)`,
+        duplicate: true,
+      });
+    }
+
+    // Record event as PENDING
+    webhookEventStore.set(eventId, {
+      eventId,
+      provider: "razorpay",
+      receivedAt: new Date().toISOString(),
+      status: "PENDING",
+      payloadHash: hashPayload(body),
+    });
+
+    // ── Extract transaction reference ───────────────────────────
+    const orderId =
+      webhookPayload.order?.entity?.id ||
+      webhookPayload.payment?.entity?.order_id;
+    const paymentId = webhookPayload.payment?.entity?.id;
 
     if (!orderId) {
+      webhookEventStore.set(eventId, {
+        ...webhookEventStore.get(eventId)!,
+        status: "PROCESSED",
+        processedAt: new Date().toISOString(),
+      });
       return NextResponse.json(
         { error: "Missing order_id in webhook payload" },
         { status: 400 },
@@ -82,21 +170,25 @@ export async function POST(request: Request) {
     }
 
     // Find the internal transaction by provider reference (orderId)
-    // In demo mode, we search through all transactions
-    const { getAllPaymentTransactions } = await import(
-      "@/lib/ledger/ledger.service"
-    );
+    const { getAllPaymentTransactions } =
+      await import("@/lib/ledger/ledger.service");
     const allTxs = await getAllPaymentTransactions(1000);
     const transaction = allTxs.find(
-      (tx) => tx.providerReference === orderId,
+      (tx) =>
+        tx.providerReference === orderId || tx.providerOrderId === orderId,
     );
 
     if (!transaction) {
-      // Log unknown webhook
       await logAuditEvent("WEBHOOK_UNKNOWN_TRANSACTION", "system", {
         event,
         orderId,
         paymentId,
+      });
+
+      webhookEventStore.set(eventId, {
+        ...webhookEventStore.get(eventId)!,
+        status: "PROCESSED",
+        processedAt: new Date().toISOString(),
       });
 
       return NextResponse.json(
@@ -105,14 +197,19 @@ export async function POST(request: Request) {
       );
     }
 
-    // Map webhook event to payment state
+    // ── Map webhook event to payment state ──────────────────────
     const targetState = EVENT_TO_PAYMENT_STATE[event];
     if (!targetState) {
-      // Unhandled event type — log and acknowledge
       await logAuditEvent("WEBHOOK_UNHANDLED_EVENT", "system", {
         event,
         transactionId: transaction.id,
         orderId,
+      });
+
+      webhookEventStore.set(eventId, {
+        ...webhookEventStore.get(eventId)!,
+        status: "PROCESSED",
+        processedAt: new Date().toISOString(),
       });
 
       return NextResponse.json({
@@ -121,20 +218,25 @@ export async function POST(request: Request) {
       });
     }
 
-    // Validate state transition
+    // ── Validate state transition ───────────────────────────────
     const transition = PaymentStateMachine.canTransitionPayment(
       transaction.paymentState,
-      targetState as any,
+      targetState as PaymentState,
     );
 
     if (!transition.allowed) {
-      // Out-of-order webhook — log incident
       await logAuditEvent("WEBHOOK_OUT_OF_ORDER", "system", {
         event,
         currentState: transaction.paymentState,
         attemptedState: targetState,
         transactionId: transaction.id,
         reason: transition.reason,
+      });
+
+      webhookEventStore.set(eventId, {
+        ...webhookEventStore.get(eventId)!,
+        status: "PROCESSED",
+        processedAt: new Date().toISOString(),
       });
 
       return NextResponse.json({
@@ -145,12 +247,20 @@ export async function POST(request: Request) {
       });
     }
 
-    // Apply state transition
+    // ── Apply state transition ──────────────────────────────────
     await updatePaymentTransactionState(
       transaction.id,
-      targetState as any,
+      targetState as PaymentState,
       transaction.settlementState,
+      { providerPaymentId: paymentId },
     );
+
+    // Mark event as processed
+    webhookEventStore.set(eventId, {
+      ...webhookEventStore.get(eventId)!,
+      status: "PROCESSED",
+      processedAt: new Date().toISOString(),
+    });
 
     await logAuditEvent("WEBHOOK_PROCESSED", "system", {
       event,
@@ -166,10 +276,10 @@ export async function POST(request: Request) {
       message: `Webhook ${event} processed: ${transaction.paymentState} → ${targetState}`,
       transactionId: transaction.id,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Webhook processing error:", error);
     return NextResponse.json(
-      { error: error.message || "Internal server error" },
+      { error: (error as Error).message || "Internal server error" },
       { status: 500 },
     );
   }

@@ -132,9 +132,7 @@ export class IncidentCorrelator {
       // Merge into existing incident
       match.affectedTransactionCount += newIncident.affectedTransactionCount;
       match.totalAffectedAmount += newIncident.totalAffectedAmount;
-      match.reconciliationItemIds.push(
-        ...newIncident.reconciliationItemIds,
-      );
+      match.reconciliationItemIds.push(...newIncident.reconciliationItemIds);
 
       // Merge mismatch types (deduplicate)
       for (const mt of newIncident.mismatchTypes) {

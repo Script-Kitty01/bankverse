@@ -28,7 +28,7 @@ export interface MatcherConfig {
 
 const DEFAULT_CONFIG: MatcherConfig = {
   amountTolerance: 0, // exact amount match by default
-  timeWindowMs: 24 * 60 * 60 * 1000, // 24 hours
+  timeWindowMs: 60 * 60 * 1000, // 1 hour (was 24h — too loose for financial reconciliation)
   minConfidence: 0.8,
 };
 
@@ -54,9 +54,12 @@ export class ReconciliationMatcher {
     const matchedExternal = new Set<string>();
 
     for (const tx of internalTransactions) {
-      // Try exact match by provider reference
+      // Try exact match by provider reference (or providerOrderId)
       const exactMatch = externalRecords.find(
-        (ext) => ext.reference === tx.providerReference,
+        (ext) =>
+          ext.reference === tx.providerReference ||
+          ext.reference === tx.providerOrderId ||
+          ext.reference === tx.providerPaymentId,
       );
 
       if (exactMatch) {
@@ -66,16 +69,31 @@ export class ReconciliationMatcher {
         continue;
       }
 
-      // Try fuzzy match by amount + time window
-      const fuzzyMatch = this.findFuzzyMatch(
+      // Try fuzzy match by amount + time window + dimensions
+      const fuzzyResult = this.findFuzzyMatch(
         tx,
         externalRecords,
         matchedExternal,
       );
-      if (fuzzyMatch) {
-        matchedExternal.add(fuzzyMatch.reference);
-        const result = this.buildMatchResult(tx, fuzzyMatch, "FUZZY");
-        items.push(this.buildItem(tx, fuzzyMatch, runId, result));
+
+      if (fuzzyResult.ambiguous) {
+        // Multiple candidates with identical/similar confidence — flag as AMBIGUOUS_MATCH
+        const ambiguousResult = {
+          status: "AMBIGUOUS_MATCH" as MatchStatus,
+          mismatchType: "AMBIGUOUS_CANDIDATES" as MismatchType,
+          method: "MANUAL" as MatchMethod,
+          confidence: 0,
+        };
+        const item = this.buildItem(tx, null, runId, ambiguousResult);
+        item.notes = `AMBIGUOUS_MATCH: ${fuzzyResult.candidates.length} candidates with identical confidence found. Escalated to ACTION_REQUIRED for human review.`;
+        items.push(item);
+        continue;
+      }
+
+      if (fuzzyResult.match) {
+        matchedExternal.add(fuzzyResult.match.reference);
+        const result = this.buildMatchResult(tx, fuzzyResult.match, "FUZZY");
+        items.push(this.buildItem(tx, fuzzyResult.match, runId, result));
         continue;
       }
 
@@ -104,17 +122,17 @@ export class ReconciliationMatcher {
 
     // Build evidence from items (so itemId is properly set)
     const evidence: ReconciliationEvidence[] = items.map((item) => {
-      const tx = internalTransactions.find(
-        (t) => t.id === item.internalTransactionId,
-      ) || null;
-      const ext = externalRecords.find(
-        (e) => e.reference === item.externalReference,
-      ) || null;
+      const tx =
+        internalTransactions.find((t) => t.id === item.internalTransactionId) ||
+        null;
+      const ext =
+        externalRecords.find((e) => e.reference === item.externalReference) ||
+        null;
       return this.buildEvidence(tx, ext, item.id, {
         status: item.matchStatus,
         mismatchType: item.mismatchType,
         method: item.matchMethod,
-        confidence: 0, // confidence not stored on item, derive from match method
+        confidence: 0,
       });
     });
 
@@ -127,10 +145,13 @@ export class ReconciliationMatcher {
     tx: PaymentTransaction,
     externalRecords: ExternalRecord[],
     matchedExternal: Set<string>,
-  ): ExternalRecord | null {
+  ): {
+    match: ExternalRecord | null;
+    ambiguous: boolean;
+    candidates: ExternalRecord[];
+  } {
     const txTime = new Date(tx.createdAt).getTime();
-    let bestMatch: ExternalRecord | null = null;
-    let bestConfidence = 0;
+    const candidates: { ext: ExternalRecord; confidence: number }[] = [];
 
     for (const ext of externalRecords) {
       if (matchedExternal.has(ext.reference)) continue;
@@ -143,21 +164,77 @@ export class ReconciliationMatcher {
       const amountDiff = Math.abs(tx.amount - ext.amount);
       if (amountDiff > this.config.amountTolerance) continue;
 
-      // Confidence based on how close the match is
-      const timeConfidence = 1 - timeDiff / this.config.timeWindowMs;
+      // Multi-dimensional confidence scoring
+      let dimensionBonus = 0;
+      let dimensionCount = 0;
+
+      // Amount proximity
       const amountConfidence =
         this.config.amountTolerance > 0
           ? 1 - amountDiff / this.config.amountTolerance
           : 1;
-      const confidence = (timeConfidence + amountConfidence) / 2;
+      dimensionBonus += amountConfidence;
+      dimensionCount++;
 
-      if (confidence >= this.config.minConfidence && confidence > bestConfidence) {
-        bestMatch = ext;
-        bestConfidence = confidence;
+      // Time proximity
+      const timeConfidence = 1 - timeDiff / this.config.timeWindowMs;
+      dimensionBonus += timeConfidence;
+      dimensionCount++;
+
+      // Currency match
+      if (tx.currency === ext.currency) {
+        dimensionBonus += 1;
+        dimensionCount++;
+      }
+
+      // Method match (if available on both sides)
+      if (tx.method && ext.method && tx.method === ext.method) {
+        dimensionBonus += 1;
+        dimensionCount++;
+      }
+
+      // Customer/merchant match (if external record has counterparty info)
+      if (ext.counterpartyId) {
+        if (
+          ext.counterpartyId === tx.customerId ||
+          ext.counterpartyId === tx.merchantId
+        ) {
+          dimensionBonus += 1;
+          dimensionCount++;
+        }
+      }
+
+      const confidence = dimensionBonus / dimensionCount;
+
+      if (confidence >= this.config.minConfidence) {
+        candidates.push({ ext, confidence });
       }
     }
 
-    return bestMatch;
+    if (candidates.length === 0) {
+      return { match: null, ambiguous: false, candidates: [] };
+    }
+
+    // Sort by confidence descending
+    candidates.sort((a, b) => b.confidence - a.confidence);
+
+    // Ambiguity detection: if top 2 candidates are within 0.1 confidence of each other
+    if (
+      candidates.length >= 2 &&
+      candidates[0].confidence - candidates[1].confidence < 0.1
+    ) {
+      return {
+        match: null,
+        ambiguous: true,
+        candidates: candidates.map((c) => c.ext),
+      };
+    }
+
+    return {
+      match: candidates[0].ext,
+      ambiguous: false,
+      candidates: candidates.map((c) => c.ext),
+    };
   }
 
   private buildMatchResult(

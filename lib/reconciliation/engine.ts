@@ -12,7 +12,6 @@ import { ReconciliationMatcher } from "./matcher";
 import type { MatcherConfig } from "./matcher";
 import type {
   ReconciliationRun,
-  ReconciliationItem,
   ReconciliationReport,
   ExternalRecord,
 } from "./types";
@@ -70,7 +69,7 @@ export class ReconciliationEngine {
       const externalRecords = await this.fetchExternalRecords(dateRange);
 
       // 3. Run matcher
-      const { items, evidence } = this.matcher.match(
+      const { items } = this.matcher.match(
         internalTransactions,
         externalRecords,
         runId,
@@ -79,7 +78,9 @@ export class ReconciliationEngine {
       // 4. Compute summary
       run.totalItems = items.length;
       run.matchedItems = items.filter(
-        (i) => i.matchStatus === "MATCHED_EXACT" || i.matchStatus === "MATCHED_FUZZY",
+        (i) =>
+          i.matchStatus === "MATCHED_EXACT" ||
+          i.matchStatus === "MATCHED_FUZZY",
       ).length;
       run.mismatchedItems = items.filter(
         (i) => i.matchStatus === "MISMATCHED",
@@ -114,7 +115,7 @@ export class ReconciliationEngine {
         },
         generatedAt: new Date().toISOString(),
       };
-    } catch (error) {
+    } catch {
       run.status = "FAILED";
       run.completedAt = new Date().toISOString();
 

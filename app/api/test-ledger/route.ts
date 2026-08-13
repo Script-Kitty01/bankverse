@@ -12,7 +12,6 @@ import {
   getBalance,
   getTransactionHistory,
   verifyLedgerIntegrity,
-  getPaymentTransactionByIdempotencyKey,
 } from "@/lib/ledger/ledger.service";
 
 interface TestResult {
@@ -70,7 +69,7 @@ export async function GET() {
     // The validation is structural: if someone adds a 3rd entry manually, it'd fail.
     // We verify the validation exists by checking the code path.
     const idempotencyKey = `test-balanced-${Date.now()}`;
-    const result = await recordTransaction({
+    await recordTransaction({
       customerId: "test-customer-2",
       merchantId: "test-merchant-2",
       amount: 1000,
@@ -191,7 +190,7 @@ export async function GET() {
     });
   }
 
-  // ─── Test 5: Balance is derived from entries ──────────────────
+  // ─── Test 5: Balance is derived from entries (clearing account) ─
   try {
     const runId = Date.now();
     const idempotencyKey = `test-balance-${runId}`;
@@ -206,20 +205,21 @@ export async function GET() {
     });
 
     const customerBalance = await getBalance(result.debitEntry.accountId);
-    const merchantBalance = await getBalance(result.creditEntry.accountId);
+    const clearingBalance = await getBalance(result.creditEntry.accountId);
 
-    // Customer: debited 3000, so derivedBalance = -3000 (or totalCredits - totalDebits)
-    // Merchant: credited 3000, so derivedBalance = +3000
+    // Customer: debited 3000, so totalDebits = 3000
+    // Clearing: credited 3000, so totalCredits = 3000
+    // Merchant gets NOTHING until settlement (clearing account architecture)
     const passed =
       customerBalance.totalDebits === 3000 &&
-      merchantBalance.totalCredits === 3000;
+      clearingBalance.totalCredits >= 3000;
 
     results.push({
-      name: "Balance is derived from entries (not stored)",
+      name: "Balance is derived from entries (clearing account)",
       passed,
       details: passed
-        ? `Customer: debits=${customerBalance.totalDebits}, credits=${customerBalance.totalCredits}, balance=${customerBalance.derivedBalance}. Merchant: debits=${merchantBalance.totalDebits}, credits=${merchantBalance.totalCredits}, balance=${merchantBalance.derivedBalance}`
-        : `Customer balance: ${JSON.stringify(customerBalance)}, Merchant balance: ${JSON.stringify(merchantBalance)}`,
+        ? `Customer: debits=${customerBalance.totalDebits}, balance=${customerBalance.derivedBalance}. Clearing: credits=${clearingBalance.totalCredits}, balance=${clearingBalance.derivedBalance}`
+        : `Customer balance: ${JSON.stringify(customerBalance)}, Clearing balance: ${JSON.stringify(clearingBalance)}`,
     });
   } catch (e: any) {
     results.push({

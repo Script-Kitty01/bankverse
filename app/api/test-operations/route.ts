@@ -5,7 +5,10 @@
  */
 
 import { NextResponse } from "next/server";
-import { IncidentDetector, type PaymentIncident } from "@/lib/incidents/detector";
+import {
+  IncidentDetector,
+  type PaymentIncident,
+} from "@/lib/incidents/detector";
 import { IncidentCorrelator } from "@/lib/incidents/correlator";
 import { getAllPaymentTransactions } from "@/lib/ledger/ledger.service";
 import { getReconciliationEngine } from "@/lib/reconciliation/engine";
@@ -66,7 +69,10 @@ export async function GET() {
       start: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
       end: new Date().toISOString(),
     });
-    const mockProvider = new MockPaymentProvider({ latency: 10, failureRate: 0 });
+    const mockProvider = new MockPaymentProvider({
+      latency: 10,
+      failureRate: 0,
+    });
     const providerHealth = {
       razorpay: await mockProvider.healthCheck(),
       dwolla: true,
@@ -119,7 +125,8 @@ export async function GET() {
 
       results["incident-lifecycle"] = {
         name: "Incident Lifecycle (detect → resolve)",
-        passed: resolved !== null && stillActive.length < activeIncidents.length,
+        passed:
+          resolved !== null && stillActive.length < activeIncidents.length,
         actualBehavior:
           resolved !== null
             ? `Resolved incident ${activeIncidents[0].id}, active count: ${activeIncidents.length} → ${stillActive.length}`
@@ -170,9 +177,15 @@ export async function GET() {
 
   // Test 6: Provider health check
   try {
-    const mockProvider = new MockPaymentProvider({ latency: 10, failureRate: 0 });
+    const mockProvider = new MockPaymentProvider({
+      latency: 10,
+      failureRate: 0,
+    });
     const healthy = await mockProvider.healthCheck();
-    const unhealthyProvider = new MockPaymentProvider({ latency: 10, failureRate: 1.0 });
+    const unhealthyProvider = new MockPaymentProvider({
+      latency: 10,
+      failureRate: 1.0,
+    });
     const unhealthy = await unhealthyProvider.healthCheck();
 
     results["provider-health"] = {
@@ -226,8 +239,11 @@ export async function GET() {
       totalAffectedAmount: 500000,
       reconciliationItemIds: ["r6"],
     };
-    const result2 = IncidentCorrelator.correlate(similarIncident, [baseIncident]);
-    const merged = result2.wasMerged && result2.mergedIntoId === "inc_corr_test_1";
+    const result2 = IncidentCorrelator.correlate(similarIncident, [
+      baseIncident,
+    ]);
+    const merged =
+      result2.wasMerged && result2.mergedIntoId === "inc_corr_test_1";
     const escalated = result2.incident.affectedTransactionCount === 1205; // 5 + 1200
     const amountSum = result2.incident.totalAffectedAmount === 505000; // 5000 + 500000
 
@@ -242,7 +258,8 @@ export async function GET() {
     ]);
     const notMerged = !result3.wasMerged;
 
-    const allPassed = standalone && merged && escalated && amountSum && notMerged;
+    const allPassed =
+      standalone && merged && escalated && amountSum && notMerged;
 
     results["incident-correlation"] = {
       name: "Incident Correlation (same provider+type+window merges)",
@@ -268,7 +285,10 @@ export async function GET() {
     total: Object.keys(results).length,
     passed,
     failed,
-    passRate: Object.keys(results).length > 0 ? passed / Object.keys(results).length : 0,
+    passRate:
+      Object.keys(results).length > 0
+        ? passed / Object.keys(results).length
+        : 0,
     results,
   });
 }

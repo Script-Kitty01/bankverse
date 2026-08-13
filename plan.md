@@ -1,27 +1,221 @@
-# BankVerse — Full-Stack Implementation Plan
+# 🛡️ BankVerse v2 — Architectural Evolution & Implementation Roadmap
 
-> **Tech Stack:** Next.js 15, TypeScript, Appwrite (Auth + DB), Plaid, Dwolla, Tailwind CSS, shadcn/ui, Chart.js
-> **DevOps:** GitHub Actions, Docker, Vercel, Sentry
+> **Engineering Thesis**: _How do you maintain absolute financial correctness when payment providers, webhooks, network retries, and downstream systems fail or behave unpredictably?_
 
 ---
 
-## Phase 1 — Core Backend (Authentication + Database)
+## 🎯 Architectural Principles & Goals
 
-### 1.1 Appwrite Setup
+1. **Strict Financial Invariants**:
+   - Double-entry ledger is strictly append-only and always balanced ($\sum \text{debits} \equiv \sum \text{credits}$).
+   - Three-legged clearing booking model (_Customer $\rightarrow$ Clearing $\rightarrow$ Merchant_) prevents $DEBIT\_WITHOUT\_CREDIT$ anomalies.
+2. **Concurrency & Idempotency Safety**:
+   - Optimistic Concurrency Control (OCC) using entity versioning (`version`) guarantees atomic, single-winner state transitions.
+   - Redis + Database uniqueness ensures duplicate API/webhook calls produce exactly 1 financial movement and return consistent cached results.
+3. **Transactional Event Consistency**:
+   - Transactional Outbox pattern guarantees atomic persistence of Payment State, Ledger Entries, and Outbox Events within a single database transaction.
+4. **Resilient Eventual Settlement & Operations**:
+   - Independent background reconciliation matches internal ledger records against external provider feeds.
+   - Incident detection and correlation group related failure spikes into unified, actionable operational incidents.
+5. **Verifiable Chaos Proof Layer**:
+   - Chaos Lab scenarios validate system invariants under injected faults (race conditions, network timeouts, out-of-order webhooks, worker crashes).
 
-- [ ] Create Appwrite Cloud project (or self-hosted instance)
-- [ ] Create `bankverse` database with collections:
-  - `users` — `$id`, `email`, `userId`, `firstName`, `lastName`, `address1`, `city`, `state`, `postalCode`, `dateOfBirth`, `ssn`, `dwollaCustomerUrl`, `dwollaCustomerId`
-  - `banks` — `$id`, `userId`, `accountId`, `bankId`, `accessToken`, `fundingSourceUrl`, `sharableId`
-  - `transactions` — `$id`, `accountId`, `name`, `amount`, `category`, `date`, `paymentChannel`, `type`, `pending`, `senderBankId`, `receiverBankId`
-- [ ] Set up Appwrite API keys and permissions
-- [ ] Create `.env.local` with:
-  ```
-  NEXT_PUBLIC_APPWRITE_ENDPOINT=https://cloud.appwrite.io/v1
-  NEXT_PUBLIC_APPWRITE_PROJECT_ID=xxx
-  NEXT_PUBLIC_APPWRITE_DATABASE_ID=xxx
-  APPWRITE_API_KEY=xxx
-  ```
+---
+
+## 🗺️ Implementation Phases
+
+```mermaid
+graph TD
+    P1[Phase 1: Financial Model & Clearing Ledger] --> P2[Phase 2: Optimistic Concurrency Control]
+    P2 --> P3[Phase 3: Two-Tiered Idempotency Layer]
+    P3 --> P4[Phase 4: Transactional Outbox & Async Workers]
+    P4 --> P5[Phase 5: Independent Reconciliation & Ambiguity Handling]
+    P5 --> P6[Phase 6: Incident Correlation & Operations Integration]
+    P6 --> P7[Phase 7: Invariant-Driven Chaos Proof Suite]
+```
+
+---
+
+### Phase 1: Financial Model & Three-Legged Clearing Ledger
+
+- **Goal**: Guarantee ledger double-entry balance under all success and failure conditions.
+- **Key Changes**:
+  - Implement three-legged booking:
+    1. **Authorization/Capture**: Debit Customer $\rightarrow$ Credit Clearing Suspense Account.
+    2. **Settlement**: Debit Clearing Suspense Account $\rightarrow$ Credit Merchant.
+    3. **Failure/Reversal**: Debit Clearing Suspense Account $\rightarrow$ Credit Customer.
+  - Enforce invariant: Merchant account is **never credited** until external capture is confirmed.
+  - Re-label legacy $DEBIT\_WITHOUT\_CREDIT$ concept to $DEBIT\_WITHOUT\_MERCHANT\_SETTLEMENT$ to reflect balanced Clearing Account semantics.
+- **Invariants Verified**:
+  - $\sum \text{debits} - \sum \text{credits} = 0$ across all accounts at all times.
+  - Incomplete/failed transactions leave customer funds in Clearing before automated reversal.
+
+---
+
+### Phase 2: Optimistic Concurrency Control (OCC)
+
+- **Goal**: Prevent race conditions, double-settlements, and concurrent state corruption.
+- **Key Changes**:
+  - Add `version: number` attribute to `PaymentTransaction` and `LedgerAccount` schemas.
+  - Enforce conditional updates on state transitions:
+    ```sql
+    UPDATE payments
+    SET state = 'SUCCESS', version = version + 1
+    WHERE id = ? AND state = 'PROCESSING' AND version = ?
+    ```
+- **Invariants Verified**:
+  - Concurrent operations on the same transaction result in **1 winner** and $N-1$ safe OCC conflicts/retries.
+  - Zero double-charges or double-refunds under parallel requests.
+
+---
+
+### Phase 3: Two-Tiered Idempotency Layer (Redis + DB)
+
+- **Goal**: Prevent duplicate transaction processing while returning deterministic responses to clients.
+- **Key Changes**:
+  - **Tier 1 (Redis)**: Short-lived distributed lock (`SETNX` with TTL) on `Idempotency-Key` for fast duplicate rejection and result caching.
+  - **Tier 2 (Database)**: Authoritative unique index constraint on `idempotencyKey` in `PaymentTransaction` table as the ultimate guard.
+  - Return cached original transaction payload for repeated requests instead of generic error codes.
+- **Invariants Verified**:
+  - $N$ identical API requests with the same idempotency key produce **1 financial transaction** and $N$ identical safe responses.
+  - Database unique index remains the absolute source of truth over Redis cache.
+
+---
+
+### Phase 4: Transactional Outbox & Async Worker Engine
+
+- **Goal**: Decouple payment processing from external network calls without losing events or creating inconsistent states.
+- **Key Changes**:
+  - Create `outbox_events` schema (`id`, `aggregateId`, `eventType`, `payload`, `status`, `createdAt`, `version`).
+  - Wrap Payment State + Ledger Entries + Outbox Event creation in a single atomic database transaction.
+  - Implement async worker process to poll/consume outbox events, execute provider API calls, and emit downstream settlement events.
+- **Invariants Verified**:
+  - **At-Least-Once Delivery**: Worker crash after DB commit does not cause lost events.
+  - **Idempotent Execution**: Worker retries do not duplicate ledger entries.
+
+---
+
+### Phase 5: Independent Reconciliation & Ambiguity Handling
+
+- **Goal**: Verify internal financial truth independently against external provider settlement feeds.
+- **Key Changes**:
+  - Maintain independent settlement feed import rather than relying solely on internal outbox events.
+  - Add explicit `AMBIGUOUS_MATCH` status for fuzzy matches with multiple plausible external candidates (e.g., identical amount, provider, and customer on the same day).
+  - Escalate `AMBIGUOUS_MATCH` items to `ACTION_REQUIRED` for human/operator intervention.
+- **Invariants Verified**:
+  - Zero false-positive auto-reconciliations on ambiguous records.
+  - Internal and external sources of truth remain strictly decoupled for independent verification.
+
+---
+
+### Phase 6: Incident Correlation & Operations Integration
+
+- **Goal**: Aggregate systemic failure signals into single actionable incidents to eliminate alert fatigue.
+- **Key Changes**:
+  - Route `PAYMENT_UNKNOWN`, `RECONCILIATION_MISMATCH`, and provider error spikes into `IncidentDetector`.
+  - Group events by `provider` + `method` + `errorType` over sliding 5-minute time windows via `IncidentCorrelator`.
+  - Connect operations dashboard to trigger automated compensating ledger entries.
+- **Invariants Verified**:
+  - 1,000 failure events from a provider outage group into **1 correlated incident**.
+
+---
+
+### Phase 7: Invariant-Driven Chaos Proof Suite
+
+- **Goal**: Automated test harness demonstrating all system invariants under fault injection.
+- **Scenarios & Assertions**:
+  1. **Concurrent Refund Race**: 100 simultaneous refunds $\rightarrow$ 1 refund succeeds, 99 OCC rejections.
+  2. **Worker Crash & Recovery (`WORKER_CRASH_AFTER_COMMIT`)**: DB transaction commits $\rightarrow$ Worker process crashes $\rightarrow$ Process restarts $\rightarrow$ Outbox event recovered and processed without duplicate financial movement.
+  3. **Duplicate Request Burst**: 10 parallel requests with same key $\rightarrow$ 1 financial movement, 10 identical safe responses.
+  4. **Out-of-Order Webhooks**: `SUCCESS` followed by `PROCESSING` $\rightarrow$ Final state remains `SUCCESS`.
+  5. **Provider Timeout Recovery**: Network timeout $\rightarrow$ `UNKNOWN` state $\rightarrow$ `getPaymentStatus()` status recovery $\rightarrow$ Settlement decision.
+  6. **Clearing Settlement Failure**: Customer debited to Clearing $\rightarrow$ Settlement fails $\rightarrow$ Merchant uncredited, ledger balanced, incident created $\rightarrow$ Automated compensation.
+  7. **Ambiguous Reconciliation**: Multiple plausible external candidates $\rightarrow$ `AMBIGUOUS_MATCH` status, zero auto-matches.
+
+---
+
+## ✅ Pre-Demo Verification Checklist
+
+- [ ] **Phase 1 Invariants**: Every ledger entry operation satisfies $\sum \text{debits} - \sum \text{credits} = 0$. Merchant is never credited before capture.
+- [ ] **Phase 2 Invariants**: 100 concurrent state transitions on the same transaction produce exactly 1 winner and 99 OCC conflict rejections.
+- [ ] **Phase 3 Invariants**: 10 duplicate payment requests produce exactly 1 financial movement and 10 safe responses. Database unique index serves as ultimate guard.
+- [ ] **Phase 4 Invariants**: Simulating a worker crash after DB commit recovers the outbox event upon restart without duplicate financial movements.
+- [ ] **Phase 5 Invariants**: Multi-candidate reconciliation records resolve to `AMBIGUOUS_MATCH` without auto-matching.
+- [ ] **Phase 6 Invariants**: 1,000 failure events during a provider outage merge into 1 correlated incident on the Operations Dashboard.
+- [ ] **Phase 7 Invariants**: Every Chaos Lab scenario run preserves global double-entry ledger balance.
+
+---
+
+## 🏛️ Target Architecture Overview
+
+```
+                         CLIENT
+                           │
+                           ▼
+                   API / Payment Command
+                           │
+                           ▼
+                  ┌─────────────────┐
+                  │ Idempotency     │
+                  │ Redis + DB      │
+                  └────────┬────────┘
+                           │
+                           ▼
+                  ┌─────────────────────┐
+                  │ AUTHORITATIVE DB    │
+                  │                     │
+                  │ Payment + OCC       │
+                  │ Ledger              │
+                  │ Clearing Account    │
+                  │ Outbox              │
+                  └──────────┬──────────┘
+                             │
+                      ATOMIC COMMIT
+                             │
+                             ▼
+                        OUTBOX TABLE
+                             │
+                             ▼
+                     ASYNC EVENT WORKER
+                       │         │
+                       ▼         ▼
+                   Provider   Other consumers
+                       │
+                  ┌────┴────┐
+                  ▼         ▼
+               SUCCESS    UNKNOWN
+                  │         │
+                  │      Status Query
+                  │         │
+                  └────┬────┘
+                       ▼
+                  SETTLEMENT
+                       │
+                       ▼
+              PROVIDER SETTLEMENT FEED
+                       │
+                       ▼
+                RECONCILIATION
+                       │
+             ┌─────────┴─────────┐
+             ▼                   ▼
+          MATCHED            MISMATCH / AMBIGUOUS
+                                 │
+                                 ▼
+                         INCIDENT DETECTOR
+                                 │
+                                 ▼
+                         INCIDENT CORRELATOR
+                                 │
+                                 ▼
+                         OPERATIONS / RECOVERY
+```
+
+NEXT_PUBLIC_APPWRITE_PROJECT_ID=xxx
+NEXT_PUBLIC_APPWRITE_DATABASE_ID=xxx
+APPWRITE_API_KEY=xxx
+
+```
 
 ### 1.2 Appwrite SDK Integration
 
@@ -33,10 +227,10 @@
 ### 1.3 Real Authentication
 
 - [ ] Rewrite `lib/actions/user.actions.ts`:
-  - `signUp()` — create Appwrite account + user document in DB
-  - `signIn()` — create Appwrite email/password session
-  - `signOut()` — delete current session
-  - `getCurrentUser()` — fetch logged-in user from session
+- `signUp()` — create Appwrite account + user document in DB
+- `signIn()` — create Appwrite email/password session
+- `signOut()` — delete current session
+- `getCurrentUser()` — fetch logged-in user from session
 - [ ] Add Next.js middleware (`middleware.ts`) to protect `(root)` routes
 - [ ] Redirect unauthenticated users to `/sign-in`
 - [ ] Replace mock `loggedIn` in `(root)/layout.tsx` with real `getCurrentUser()`
@@ -57,18 +251,20 @@
 - [ ] Install `plaid` npm package
 - [ ] Create Plaid developer account, get sandbox keys
 - [ ] Add to `.env.local`:
-  ```
-  PLAID_CLIENT_ID=xxx
-  PLAID_SECRET=sandbox-xxx
-  PLAID_ENV=sandbox
-  ```
+```
+
+PLAID_CLIENT_ID=xxx
+PLAID_SECRET=sandbox-xxx
+PLAID_ENV=sandbox
+
+```
 - [ ] Create `lib/plaid/config.ts` — Plaid client setup
 - [ ] Create `lib/actions/plaid.actions.ts`:
-  - `createLinkToken()` — generate Plaid Link token for a user
-  - `exchangePublicToken()` — exchange public token for access token
-  - `getAccounts()` — fetch accounts from Plaid
-  - `getTransactions()` — fetch transactions from Plaid
-  - `getAccountBalances()` — fetch real-time balances
+- `createLinkToken()` — generate Plaid Link token for a user
+- `exchangePublicToken()` — exchange public token for access token
+- `getAccounts()` — fetch accounts from Plaid
+- `getTransactions()` — fetch transactions from Plaid
+- `getAccountBalances()` — fetch real-time balances
 - [ ] Build `<PlaidLink />` component (replace `{/* plaid link */}` in AuthForm)
 - [ ] Store Plaid `accessToken` and `itemId` in Appwrite `banks` collection
 
@@ -76,17 +272,19 @@
 
 - [ ] Create Dwolla sandbox account
 - [ ] Add to `.env.local`:
-  ```
-  DWOLLA_KEY=xxx
-  DWOLLA_SECRET=xxx
-  DWOLLA_ENV=sandbox
-  ```
+```
+
+DWOLLA_KEY=xxx
+DWOLLA_SECRET=xxx
+DWOLLA_ENV=sandbox
+
+````
 - [ ] Create `lib/dwolla/config.ts` — Dwolla client
 - [ ] Create `lib/actions/dwolla.actions.ts`:
-  - `createDwollaCustomer()` — create Dwolla customer for new users
-  - `createFundingSource()` — link Plaid processor token to Dwolla
-  - `createTransfer()` — initiate ACH transfer
-  - `getTransferStatus()` — check transfer status
+- `createDwollaCustomer()` — create Dwolla customer for new users
+- `createFundingSource()` — link Plaid processor token to Dwolla
+- `createTransfer()` — initiate ACH transfer
+- `getTransferStatus()` — check transfer status
 
 ### 2.3 Testing — Phase 2
 
@@ -111,7 +309,7 @@
 
 - [ ] Fetch paginated transactions from Appwrite/Plaid
 - [ ] Build `<TransactionsTable />` component with columns:
-  - Name, Amount, Date, Category, Status, Channel
+- Name, Amount, Date, Category, Status, Channel
 - [ ] Add pagination controls (`<Pagination />`)
 - [ ] Add filters: date range, category, account, search by name
 - [ ] Add sort by: date, amount, name
@@ -120,10 +318,10 @@
 ### 3.3 Payment Transfer Page (`/payment-transfer`)
 
 - [ ] Build transfer form with:
-  - Source account dropdown (user's banks)
-  - Destination: own account OR external (email/routing number)
-  - Amount input with validation
-  - Transfer note/description
+- Source account dropdown (user's banks)
+- Destination: own account OR external (email/routing number)
+- Amount input with validation
+- Transfer note/description
 - [ ] Show real-time balance after source account selection
 - [ ] Transfer confirmation step with summary
 - [ ] Success page with transaction receipt
@@ -210,30 +408,30 @@
 
 - [ ] Create `Dockerfile` (multi-stage build):
 
-  ```dockerfile
-  # Stage 1: Dependencies
-  FROM node:20-alpine AS deps
-  WORKDIR /app
-  COPY package.json package-lock.json ./
-  RUN npm ci --only=production
+```dockerfile
+# Stage 1: Dependencies
+FROM node:20-alpine AS deps
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --only=production
 
-  # Stage 2: Build
-  FROM node:20-alpine AS builder
-  WORKDIR /app
-  COPY --from=deps /app/node_modules ./node_modules
-  COPY . .
-  RUN npm run build
+# Stage 2: Build
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+RUN npm run build
 
-  # Stage 3: Production
-  FROM node:20-alpine AS runner
-  WORKDIR /app
-  ENV NODE_ENV=production
-  COPY --from=builder /app/.next/standalone ./
-  COPY --from=builder /app/.next/static ./.next/static
-  COPY --from=builder /app/public ./public
-  EXPOSE 3000
-  CMD ["node", "server.js"]
-  ```
+# Stage 3: Production
+FROM node:20-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/public ./public
+EXPOSE 3000
+CMD ["node", "server.js"]
+````
 
 - [ ] Create `docker-compose.yml` for local dev with Appwrite
 - [ ] Add `.dockerignore`

@@ -16,6 +16,8 @@ import type {
   CapturePaymentResult,
   RefundPaymentParams,
   RefundPaymentResult,
+  GetPaymentStatusParams,
+  GetPaymentStatusResult,
 } from "./provider.interface";
 
 export interface MockProviderOptions {
@@ -30,6 +32,9 @@ export class MockPaymentProvider implements PaymentProvider {
 
   private latency: number;
   private failureRate: number;
+  /** Track order states so getPaymentStatus returns realistic data */
+  private orderStore: Map<string, { status: string; paymentId?: string }> =
+    new Map();
 
   constructor(options: MockProviderOptions = {}) {
     this.latency = options.latency ?? 200;
@@ -52,9 +57,11 @@ export class MockPaymentProvider implements PaymentProvider {
         error: "Mock: simulated order creation failure",
       };
     }
+    const orderId = `mock_order_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    this.orderStore.set(orderId, { status: "created" });
     return {
       success: true,
-      orderId: `mock_order_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      orderId,
       amount: params.amount,
       currency: params.currency,
     };
@@ -77,10 +84,22 @@ export class MockPaymentProvider implements PaymentProvider {
     if (this.shouldFail()) {
       return { success: false, error: "Mock: simulated capture failure" };
     }
+    // Update order store — find by paymentId prefix
+    for (const [orderId, state] of this.orderStore) {
+      if (
+        params.paymentId.includes(orderId) ||
+        state.paymentId === params.paymentId
+      ) {
+        state.status = "captured";
+        state.paymentId = params.paymentId;
+        break;
+      }
+    }
     return { success: true, paymentId: params.paymentId, status: "captured" };
   }
 
   async refundPayment(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     params: RefundPaymentParams,
   ): Promise<RefundPaymentResult> {
     await this.simulateLatency();
@@ -90,6 +109,21 @@ export class MockPaymentProvider implements PaymentProvider {
     return {
       success: true,
       refundId: `mock_refund_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    };
+  }
+
+  async getPaymentStatus(
+    params: GetPaymentStatusParams,
+  ): Promise<GetPaymentStatusResult> {
+    await this.simulateLatency();
+    const order = this.orderStore.get(params.orderId);
+    if (!order) {
+      return { success: false, status: "unknown", error: "Order not found" };
+    }
+    return {
+      success: true,
+      status: order.status as GetPaymentStatusResult["status"],
+      paymentId: order.paymentId,
     };
   }
 

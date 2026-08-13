@@ -18,6 +18,8 @@ import type {
   CapturePaymentResult,
   RefundPaymentParams,
   RefundPaymentResult,
+  GetPaymentStatusParams,
+  GetPaymentStatusResult,
 } from "./provider.interface";
 
 export class RazorpayPaymentProvider implements PaymentProvider {
@@ -47,11 +49,11 @@ export class RazorpayPaymentProvider implements PaymentProvider {
         amount: Number(order.amount) / 100,
         currency: order.currency,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Razorpay createOrder error:", error);
       return {
         success: false,
-        error: error.message || "Failed to create order",
+        error: (error as Error).message || "Failed to create order",
       };
     }
   }
@@ -72,9 +74,12 @@ export class RazorpayPaymentProvider implements PaymentProvider {
       }
 
       return { success: false, error: "Signature mismatch" };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Razorpay verifyPayment error:", error);
-      return { success: false, error: error.message || "Verification failed" };
+      return {
+        success: false,
+        error: (error as Error).message || "Verification failed",
+      };
     }
   }
 
@@ -93,9 +98,12 @@ export class RazorpayPaymentProvider implements PaymentProvider {
         paymentId: payment.id,
         status: payment.status,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Razorpay capturePayment error:", error);
-      return { success: false, error: error.message || "Capture failed" };
+      return {
+        success: false,
+        error: (error as Error).message || "Capture failed",
+      };
     }
   }
 
@@ -118,11 +126,45 @@ export class RazorpayPaymentProvider implements PaymentProvider {
 
       return {
         success: true,
-        refundId: typeof refund === "string" ? refund : (refund as any).id,
+        refundId:
+          typeof refund === "string" ? refund : (refund as { id: string }).id,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Razorpay refundPayment error:", error);
-      return { success: false, error: error.message || "Refund failed" };
+      return {
+        success: false,
+        error: (error as Error).message || "Refund failed",
+      };
+    }
+  }
+
+  async getPaymentStatus(
+    params: GetPaymentStatusParams,
+  ): Promise<GetPaymentStatusResult> {
+    try {
+      const order = await this.client.orders.fetch(params.orderId);
+      const payments = await this.client.orders.fetchPayments(params.orderId);
+
+      if (payments && payments.items && payments.items.length > 0) {
+        const latestPayment = payments.items[0];
+        return {
+          success: true,
+          status: latestPayment.status as GetPaymentStatusResult["status"],
+          paymentId: latestPayment.id,
+        };
+      }
+
+      return {
+        success: true,
+        status: order.status as GetPaymentStatusResult["status"],
+      };
+    } catch (error: unknown) {
+      console.error("Razorpay getPaymentStatus error:", error);
+      return {
+        success: false,
+        status: "unknown",
+        error: (error as Error).message || "Failed to get payment status",
+      };
     }
   }
 
@@ -131,9 +173,10 @@ export class RazorpayPaymentProvider implements PaymentProvider {
       // Lightweight check — try to fetch a non-existent order
       await this.client.orders.fetch("health_check");
       return true;
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Razorpay returns 404 for non-existent orders, which means it's reachable
-      if (error?.statusCode === 404 || error?.code === 404) return true;
+      const err = error as { statusCode?: number; code?: number };
+      if (err?.statusCode === 404 || err?.code === 404) return true;
       return false;
     }
   }

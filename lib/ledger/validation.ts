@@ -15,7 +15,12 @@ import type { LedgerEntry } from "./types";
  */
 export function validateDoubleEntry(
   entries: { entryType: "DEBIT" | "CREDIT"; amount: number }[],
-): { valid: boolean; totalDebits: number; totalCredits: number; difference: number } {
+): {
+  valid: boolean;
+  totalDebits: number;
+  totalCredits: number;
+  difference: number;
+} {
   const totalDebits = entries
     .filter((e) => e.entryType === "DEBIT")
     .reduce((sum, e) => sum + e.amount, 0);
@@ -78,8 +83,11 @@ export function validateReversalEntries(
 /**
  * Verifies global ledger integrity: SUM(all debits) === SUM(all credits).
  */
-export function verifyLedgerIntegrity(
-  entries: LedgerEntry[],
-): { valid: boolean; totalDebits: number; totalCredits: number; difference: number } {
+export function verifyLedgerIntegrity(entries: LedgerEntry[]): {
+  valid: boolean;
+  totalDebits: number;
+  totalCredits: number;
+  difference: number;
+} {
   return validateDoubleEntry(entries);
 }

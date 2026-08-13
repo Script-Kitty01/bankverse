@@ -114,6 +114,19 @@ export const CHAOS_SCENARIOS: ChaosScenarioDef[] = [
       "Every mismatch has structured evidence (internal + external records). No mismatch is silently dropped — 100% of mismatches are accounted for.",
   },
   {
+    id: "worker-crash-after-commit",
+    name: "Worker Crash After DB Commit",
+    description:
+      "Database commits transaction + outbox event, then worker process crashes — worker restart recovers event without duplicate ledger movement.",
+    severity: "CRITICAL",
+    injectDescription:
+      "Commit payment, ledger, and outbox event, then kill worker process before event execution.",
+    expectedBehavior:
+      "Process restarts → outbox event still in PENDING/PROCESSING status → worker retries and processes event without duplicate financial movement.",
+    invariant:
+      "At-least-once delivery with zero duplicate financial entries. Double-entry ledger balance is preserved across process crashes.",
+  },
+  {
     id: "refund-race-condition",
     name: "Refund Race Condition",
     description:

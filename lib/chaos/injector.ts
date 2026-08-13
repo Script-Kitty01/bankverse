@@ -10,17 +10,13 @@ import { PaymentOrchestrator } from "@/lib/payment/orchestrator";
 import { MockPaymentProvider } from "@/lib/payment/mock.provider";
 import { ReconciliationEngine } from "@/lib/reconciliation/engine";
 import { ReconciliationMatcher } from "@/lib/reconciliation/matcher";
-import {
-  recordTransaction,
-  verifyLedgerIntegrity,
-  getAllPaymentTransactions,
-} from "@/lib/ledger/ledger.service";
+import { verifyLedgerIntegrity } from "@/lib/ledger/ledger.service";
 import {
   createLedgerEntry,
   getAllLedgerEntries,
 } from "@/lib/ledger/repository";
-import type { PaymentTransaction, LedgerEntry } from "@/lib/ledger/types";
-import type { ExternalRecord, ReconciliationItem } from "@/lib/reconciliation/types";
+import type { PaymentTransaction } from "@/lib/ledger/types";
+import type { ExternalRecord } from "@/lib/reconciliation/types";
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -123,9 +119,10 @@ export class ChaosInjector {
 
       testResults.push(testResult);
       return testResult;
-    } catch (error: any) {
+    } catch (error: unknown) {
       injection.status = "FAILED";
       const duration = Date.now() - startTime;
+      const errMsg = (error as Error).message || "Unknown error";
 
       const testResult: ChaosTestResult = {
         scenarioId,
@@ -134,11 +131,11 @@ export class ChaosInjector {
         severity: scenario.severity,
         injectDescription: scenario.injectDescription,
         expectedBehavior: scenario.expectedBehavior,
-        actualBehavior: `Error: ${error.message}`,
+        actualBehavior: `Error: ${errMsg}`,
         invariant: scenario.invariant,
         invariantHeld: false,
-        invariantVerification: `Execution failed: ${error.message}`,
-        details: { error: error.message },
+        invariantVerification: `Execution failed: ${errMsg}`,
+        details: { error: errMsg },
         duration,
       };
 
@@ -216,9 +213,7 @@ export class ChaosInjector {
 
   // ─── Scenario Executors ───────────────────────────────────────
 
-  private static async executeScenario(
-    scenario: ChaosScenarioDef,
-  ): Promise<{
+  private static async executeScenario(scenario: ChaosScenarioDef): Promise<{
     passed: boolean;
     actualBehavior: string;
     invariantHeld: boolean;
@@ -243,7 +238,13 @@ export class ChaosInjector {
       case "refund-race-condition":
         return ChaosInjector.testRefundRaceCondition();
       default:
-        return { passed: false, actualBehavior: "Unknown scenario", invariantHeld: false, invariantVerification: "Unknown scenario", details: {} };
+        return {
+          passed: false,
+          actualBehavior: "Unknown scenario",
+          invariantHeld: false,
+          invariantVerification: "Unknown scenario",
+          details: {},
+        };
     }
   }
 
@@ -279,7 +280,8 @@ export class ChaosInjector {
     const passed = !result.success;
 
     // Invariant: No money is double-counted — transaction is never SUCCESS without provider confirmation
-    const invariantHeld = !result.success || result.transaction?.paymentState !== "SUCCESS";
+    const invariantHeld =
+      !result.success || result.transaction?.paymentState !== "SUCCESS";
 
     return {
       passed,
@@ -338,7 +340,11 @@ export class ChaosInjector {
       },
     ];
 
-    const { items } = matcher.match(internalTxs, externalRecords, `run-amt-${runId}`);
+    const { items } = matcher.match(
+      internalTxs,
+      externalRecords,
+      `run-amt-${runId}`,
+    );
 
     const passed =
       items.length === 1 &&
@@ -414,10 +420,17 @@ export class ChaosInjector {
       },
     ];
 
-    const { items } = matcher.match(internalTxs, externalRecords, `run-dup-${runId}`);
+    const { items } = matcher.match(
+      internalTxs,
+      externalRecords,
+      `run-dup-${runId}`,
+    );
 
     // One should be MATCHED, one UNMATCHED (MISSING_INTERNAL)
-    const matched = items.filter((i) => i.matchStatus === "MATCHED_EXACT" || i.matchStatus === "MATCHED_FUZZY");
+    const matched = items.filter(
+      (i) =>
+        i.matchStatus === "MATCHED_EXACT" || i.matchStatus === "MATCHED_FUZZY",
+    );
     const unmatched = items.filter((i) => i.matchStatus === "UNMATCHED");
 
     const passed =
@@ -523,7 +536,10 @@ export class ChaosInjector {
     const { PaymentStateMachine } = await import("@/lib/payment/state-machine");
 
     // After FAILED, SUCCESS should not be allowed
-    const transition = PaymentStateMachine.canTransitionPayment("FAILED", "SUCCESS");
+    const transition = PaymentStateMachine.canTransitionPayment(
+      "FAILED",
+      "SUCCESS",
+    );
 
     const passed = !transition.allowed;
 
@@ -556,7 +572,6 @@ export class ChaosInjector {
     invariantVerification: string;
     details: Record<string, unknown>;
   }> {
-    const runId = Date.now();
     const provider = new MockPaymentProvider({ latency: 10, failureRate: 1.0 });
     const healthCheck = await provider.healthCheck();
 
@@ -593,7 +608,10 @@ export class ChaosInjector {
     const startTime = Date.now();
 
     // Create several payments then run reconciliation
-    const orchestrator = new PaymentOrchestrator({ maxRetries: 1, retryDelayMs: 10 });
+    const orchestrator = new PaymentOrchestrator({
+      maxRetries: 1,
+      retryDelayMs: 10,
+    });
     const runId = Date.now();
 
     const txIds: string[] = [];
@@ -616,13 +634,16 @@ export class ChaosInjector {
     });
 
     const duration = Date.now() - startTime;
-    const passed = report.run.status === "COMPLETED" && report.items.length >= 5;
+    const passed =
+      report.run.status === "COMPLETED" && report.items.length >= 5;
 
     // Invariant: Every mismatch has structured evidence — 100% accounted for
     const mismatchedItems = report.items.filter(
-      (i) => i.matchStatus !== "MATCHED_EXACT" && i.matchStatus !== "MATCHED_FUZZY",
+      (i) =>
+        i.matchStatus !== "MATCHED_EXACT" && i.matchStatus !== "MATCHED_FUZZY",
     );
-    const invariantHeld = mismatchedItems.length === 0 || report.items.length > 0;
+    const invariantHeld =
+      mismatchedItems.length === 0 || report.items.length > 0;
 
     return {
       passed,
@@ -651,7 +672,10 @@ export class ChaosInjector {
     details: Record<string, unknown>;
   }> {
     const runId = Date.now();
-    const orchestrator = new PaymentOrchestrator({ maxRetries: 1, retryDelayMs: 10 });
+    const orchestrator = new PaymentOrchestrator({
+      maxRetries: 1,
+      retryDelayMs: 10,
+    });
 
     // Create a successful payment first
     const payment = await orchestrator.processPayment({

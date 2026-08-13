@@ -3,11 +3,14 @@
  *
  * Coordinates the full payment lifecycle:
  * 1. Create order via provider
- * 2. Record double-entry ledger transaction
- * 3. Verify payment
- * 4. Capture payment
- * 5. Update state machine
- * 6. Handle retries, refunds, and idempotency
+ * 2. Record ledger ONLY after provider confirms capture (money movement is source of truth)
+ * 3. Use clearing account: Customer→Clearing→Merchant (three-legged booking)
+ * 4. Handle UNKNOWN state with getPaymentStatus() recovery
+ * 5. Separate refundCapturedPayment() from compensateUnresolvedPayment()
+ *
+ * ARCHITECTURE:
+ *   createOrder → PROCESSING → verify → capture → SUCCESS → recordTransaction → settleToMerchant
+ *   If UNKNOWN/timeout: PROCESSING → UNKNOWN → queryProvider → SUCCESS→ledger OR FAILED→no ledger
  */
 
 import type { PaymentProvider } from "./provider.interface";
@@ -16,16 +19,14 @@ import { RazorpayPaymentProvider } from "./razorpay.provider";
 import { PaymentStateMachine } from "./state-machine";
 import {
   recordTransaction,
+  settleToMerchant,
+  reverseFromClearing,
+  reverseTransaction,
   updatePaymentTransactionState,
   getPaymentTransactionById,
   getPaymentTransactionByIdempotencyKey,
-  reverseTransaction,
 } from "@/lib/ledger/ledger.service";
-import type {
-  PaymentTransaction,
-  PaymentState,
-  SettlementState,
-} from "@/lib/ledger/types";
+import type { PaymentTransaction } from "@/lib/ledger/types";
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -80,7 +81,9 @@ export class PaymentOrchestrator {
   private provider: PaymentProvider;
   private config: OrchestratorConfig;
 
-  constructor(config?: Partial<OrchestratorConfig> & { provider?: PaymentProvider }) {
+  constructor(
+    config?: Partial<OrchestratorConfig> & { provider?: PaymentProvider },
+  ) {
     this.config = { ...DEFAULT_CONFIG, ...config };
     this.provider = config?.provider ?? this.resolveProvider();
   }
@@ -100,6 +103,13 @@ export class PaymentOrchestrator {
   }
 
   // ─── Process Payment (Full Flow) ──────────────────────────────
+  //
+  // NEW FLOW (ledger AFTER provider confirmation):
+  //   1. createOrder → CREATED
+  //   2. verify + capture → PROCESSING
+  //   3. On SUCCESS: recordTransaction (Customer→Clearing) → settleToMerchant (Clearing→Merchant)
+  //   4. On FAILED: no ledger entry (no money moved)
+  //   5. On UNKNOWN: query provider → resolve to SUCCESS or FAILED
 
   async processPayment(request: PaymentRequest): Promise<PaymentResult> {
     const idempotencyKey =
@@ -139,69 +149,111 @@ export class PaymentOrchestrator {
       };
     }
 
-    // Step 2: Record double-entry ledger transaction
-    const ledgerResult = await recordTransaction({
-      customerId: request.customerId,
-      merchantId: request.merchantId,
-      amount: request.amount,
-      currency: request.currency,
-      provider: this.provider.config.name,
-      providerReference: orderResult.orderId,
-      idempotencyKey,
-      description: request.description || `Payment via ${request.method}`,
-    });
-
-    // Step 3: Transition to PROCESSING
-    await updatePaymentTransactionState(
-      ledgerResult.transaction.id,
-      PaymentStateMachine.transitionPayment("CREATED", "PROCESSING"),
-      "NOT_REQUIRED",
-    );
-
-    // Step 4: Verify & capture with retries
+    // Step 2: Verify & capture with retries (NO ledger yet — money hasn't moved)
     const captureResult = await this.captureWithRetries(
-      ledgerResult.transaction,
       orderResult.orderId,
+      request,
     );
 
-    if (!captureResult.success) {
-      // Transition to FAILED
+    if (captureResult.success) {
+      // Step 3a: Provider confirmed capture → NOW record the ledger
+      const ledgerResult = await recordTransaction({
+        customerId: request.customerId,
+        merchantId: request.merchantId,
+        amount: request.amount,
+        currency: request.currency,
+        provider: this.provider.config.name,
+        providerReference: orderResult.orderId,
+        providerOrderId: orderResult.orderId,
+        idempotencyKey,
+        description: request.description || `Payment via ${request.method}`,
+        method: request.method,
+      });
+
+      // Update with provider payment ID
       await updatePaymentTransactionState(
         ledgerResult.transaction.id,
-        PaymentStateMachine.transitionPayment("PROCESSING", "FAILED"),
-        "PENDING_RECONCILIATION",
+        PaymentStateMachine.transitionPayment("PROCESSING", "SUCCESS"),
+        "NOT_REQUIRED",
+        { providerPaymentId: captureResult.paymentId },
       );
+
+      // Step 3b: Settle from clearing to merchant
+      await settleToMerchant(ledgerResult.transaction.id);
+
       return {
-        success: false,
+        success: true,
         transaction: ledgerResult.transaction,
         orderId: orderResult.orderId,
-        error: captureResult.error,
+        paymentId: captureResult.paymentId,
+      };
+    }
+
+    if (captureResult.unknown) {
+      // Step 3b: UNKNOWN — query provider to resolve
+      const statusResult = await this.provider.getPaymentStatus({
+        orderId: orderResult.orderId,
+      });
+
+      if (statusResult.success && statusResult.status === "captured") {
+        // Provider says captured — record ledger and settle
+        const ledgerResult = await recordTransaction({
+          customerId: request.customerId,
+          merchantId: request.merchantId,
+          amount: request.amount,
+          currency: request.currency,
+          provider: this.provider.config.name,
+          providerReference: orderResult.orderId,
+          providerOrderId: orderResult.orderId,
+          idempotencyKey,
+          description: request.description || `Payment via ${request.method}`,
+          method: request.method,
+        });
+
+        await updatePaymentTransactionState(
+          ledgerResult.transaction.id,
+          PaymentStateMachine.transitionPayment("PROCESSING", "SUCCESS"),
+          "NOT_REQUIRED",
+          { providerPaymentId: statusResult.paymentId },
+        );
+
+        await settleToMerchant(ledgerResult.transaction.id);
+
+        return {
+          success: true,
+          transaction: ledgerResult.transaction,
+          orderId: orderResult.orderId,
+          paymentId: statusResult.paymentId,
+        };
+      }
+
+      // Provider says not captured — no ledger, mark FAILED
+      return {
+        success: false,
+        orderId: orderResult.orderId,
+        error:
+          captureResult.error || "Payment not captured (resolved to FAILED)",
         retryCount: captureResult.retryCount,
       };
     }
 
-    // Step 5: Transition to SUCCESS
-    await updatePaymentTransactionState(
-      ledgerResult.transaction.id,
-      PaymentStateMachine.transitionPayment("PROCESSING", "SUCCESS"),
-      "NOT_REQUIRED",
-    );
-
+    // Step 3c: FAILED — no ledger entry (no money moved)
     return {
-      success: true,
-      transaction: ledgerResult.transaction,
+      success: false,
       orderId: orderResult.orderId,
-      paymentId: captureResult.paymentId,
+      error: captureResult.error,
+      retryCount: captureResult.retryCount,
     };
   }
 
   // ─── Capture with Retries ─────────────────────────────────────
 
   private async captureWithRetries(
-    transaction: PaymentTransaction,
     orderId: string,
+    request: PaymentRequest,
   ): Promise<{
     success: boolean;
+    unknown: boolean;
     paymentId?: string;
     error?: string;
     retryCount?: number;
@@ -210,7 +262,6 @@ export class PaymentOrchestrator {
 
     for (let attempt = 0; attempt <= this.config.maxRetries; attempt++) {
       try {
-        // In demo mode, simulate payment verification
         const mockPaymentId = `pay_${this.provider.config.name}_${Date.now()}`;
         const mockSignature = "demo_signature";
 
@@ -226,18 +277,24 @@ export class PaymentOrchestrator {
             await this.delay(attempt);
             continue;
           }
-          return { success: false, error: lastError, retryCount: attempt };
+          return {
+            success: false,
+            unknown: false,
+            error: lastError,
+            retryCount: attempt,
+          };
         }
 
         const captureResult = await this.provider.capturePayment({
           paymentId: verifyResult.paymentId || mockPaymentId,
-          amount: transaction.amount,
-          currency: transaction.currency,
+          amount: request.amount,
+          currency: request.currency,
         });
 
         if (captureResult.success) {
           return {
             success: true,
+            unknown: false,
             paymentId: captureResult.paymentId || mockPaymentId,
             retryCount: attempt,
           };
@@ -247,22 +304,24 @@ export class PaymentOrchestrator {
         if (attempt < this.config.maxRetries) {
           await this.delay(attempt);
         }
-      } catch (error: any) {
-        lastError = error.message || "Unknown capture error";
+      } catch (error: unknown) {
+        lastError = (error as Error).message || "Unknown capture error";
         if (attempt < this.config.maxRetries) {
           await this.delay(attempt);
         }
       }
     }
 
+    // All retries exhausted — mark as UNKNOWN (may have succeeded at provider)
     return {
       success: false,
+      unknown: true,
       error: lastError,
       retryCount: this.config.maxRetries,
     };
   }
 
-  // ─── Refund ───────────────────────────────────────────────────
+  // ─── Refund Captured Payment ──────────────────────────────────
 
   async refundPayment(request: RefundRequest): Promise<RefundResult> {
     const transaction = await getPaymentTransactionById(request.transactionId);
@@ -277,7 +336,7 @@ export class PaymentOrchestrator {
       };
     }
 
-    // Transition settlement state: NOT_REQUIRED → PENDING_RECONCILIATION → REFUND_PENDING
+    // Transition settlement state
     let currentSettlement = transaction.settlementState;
     if (currentSettlement === "NOT_REQUIRED") {
       currentSettlement = PaymentStateMachine.transitionSettlement(
@@ -302,7 +361,7 @@ export class PaymentOrchestrator {
 
     // Process refund via provider FIRST (money movement is source of truth)
     const refundResult = await this.provider.refundPayment({
-      paymentId: transaction.providerReference,
+      paymentId: transaction.providerPaymentId || transaction.providerReference,
       amount: request.amount,
       reason: request.reason,
     });
@@ -322,8 +381,7 @@ export class PaymentOrchestrator {
     // Reverse the ledger (idempotent — safe to retry if this fails)
     try {
       await reverseTransaction(transaction.id, request.reason);
-    } catch (ledgerError: any) {
-      // Provider refunded but ledger update failed — escalate for manual fix
+    } catch (ledgerError: unknown) {
       await updatePaymentTransactionState(
         transaction.id,
         transaction.paymentState,
@@ -334,7 +392,7 @@ export class PaymentOrchestrator {
       );
       return {
         success: false,
-        error: `Provider refund succeeded but ledger reversal failed: ${ledgerError.message}`,
+        error: `Provider refund succeeded but ledger reversal failed: ${(ledgerError as Error).message}`,
       };
     }
 
@@ -343,9 +401,89 @@ export class PaymentOrchestrator {
       transaction.id,
       transaction.paymentState,
       PaymentStateMachine.transitionSettlement(currentSettlement, "REFUNDED"),
+      { providerRefundId: refundResult.refundId },
     );
 
     return { success: true, refundId: refundResult.refundId };
+  }
+
+  // ─── Compensate Unresolved Payment ────────────────────────────
+  //
+  // For payments stuck in UNKNOWN or FAILED where money may have moved.
+  // Different from refundPayment() which handles confirmed SUCCESS payments.
+
+  async compensateUnresolvedPayment(
+    transactionId: string,
+    reason: string,
+  ): Promise<RefundResult> {
+    const transaction = await getPaymentTransactionById(transactionId);
+    if (!transaction) {
+      return { success: false, error: "Transaction not found" };
+    }
+
+    // Only compensate UNKNOWN or FAILED payments
+    if (
+      transaction.paymentState !== "UNKNOWN" &&
+      transaction.paymentState !== "FAILED"
+    ) {
+      return {
+        success: false,
+        error: `Cannot compensate payment in state: ${transaction.paymentState}. Use refundPayment() for SUCCESS payments.`,
+      };
+    }
+
+    // Check if money was already booked to clearing
+    const { getLedgerEntriesByTransaction } =
+      await import("@/lib/ledger/ledger.service");
+    const entries = await getLedgerEntriesByTransaction(transactionId);
+
+    if (entries.length === 0) {
+      // No ledger entries — money never moved, nothing to compensate
+      await updatePaymentTransactionState(
+        transactionId,
+        transaction.paymentState,
+        PaymentStateMachine.transitionSettlement(
+          transaction.settlementState,
+          "RESOLVED",
+        ),
+      );
+      return {
+        success: true,
+        refundId: `compensate_nop_${transactionId}`,
+      };
+    }
+
+    // Money is in clearing — reverse it back to customer
+    try {
+      await reverseFromClearing(transactionId, reason);
+    } catch (ledgerError: unknown) {
+      await updatePaymentTransactionState(
+        transactionId,
+        transaction.paymentState,
+        PaymentStateMachine.transitionSettlement(
+          transaction.settlementState,
+          "ESCALATED",
+        ),
+      );
+      return {
+        success: false,
+        error: `Compensation ledger reversal failed: ${(ledgerError as Error).message}`,
+      };
+    }
+
+    await updatePaymentTransactionState(
+      transactionId,
+      transaction.paymentState,
+      PaymentStateMachine.transitionSettlement(
+        transaction.settlementState,
+        "COMPENSATED",
+      ),
+    );
+
+    return {
+      success: true,
+      refundId: `compensate_${transactionId}`,
+    };
   }
 
   // ─── Health Check ─────────────────────────────────────────────

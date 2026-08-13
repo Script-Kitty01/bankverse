@@ -30,7 +30,10 @@ export async function GET() {
     IncidentDetector.detectFromReconciliation(report);
 
     // Check provider health
-    const mockProvider = new MockPaymentProvider({ latency: 10, failureRate: 0 });
+    const mockProvider = new MockPaymentProvider({
+      latency: 10,
+      failureRate: 0,
+    });
     const providerHealth: Record<string, boolean> = {
       razorpay: await mockProvider.healthCheck(),
       dwolla: true, // Assume healthy in demo

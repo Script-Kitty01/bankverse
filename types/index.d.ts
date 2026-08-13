@@ -1,5 +1,3 @@
-/* eslint-disable no-unused-vars */
-
 export {};
 
 declare global {
@@ -93,12 +91,7 @@ declare global {
     sharableId: string;
   };
 
-  type AccountTypes =
-    | "depository"
-    | "credit"
-    | "loan"
-    | "investment"
-    | "other";
+  type AccountTypes = "depository" | "credit" | "loan" | "investment" | "other";
 
   type Category = "Food and Drink" | "Travel" | "Transfer";
 
@@ -225,7 +218,7 @@ declare global {
 
   interface BankDropdownProps {
     accounts: Account[];
-    setValue?: UseFormSetValue<any>;
+    setValue?: UseFormSetValue<Record<string, unknown>>;
     otherStyles?: string;
   }
 

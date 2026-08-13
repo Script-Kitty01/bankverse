@@ -143,11 +143,7 @@ export default function ChaosLab() {
           </p>
         </div>
         <div className="flex gap-3">
-          <Button
-            variant="outline"
-            onClick={loadScenarios}
-            disabled={loading}
-          >
+          <Button variant="outline" onClick={loadScenarios} disabled={loading}>
             Refresh
           </Button>
           <Button
@@ -175,9 +171,13 @@ export default function ChaosLab() {
               {(report.passRate * 100).toFixed(0)}%
             </div>
             <div className="text-sm text-gray-500">
-              <span className="text-green-600 font-semibold">{report.passed} passed</span>
+              <span className="text-green-600 font-semibold">
+                {report.passed} passed
+              </span>
               {" / "}
-              <span className="text-red-600 font-semibold">{report.failed} failed</span>
+              <span className="text-red-600 font-semibold">
+                {report.failed} failed
+              </span>
               {" / "}
               <span>{report.scenariosRun} total</span>
             </div>
@@ -304,11 +304,7 @@ export default function ChaosLab() {
         {scenarios.length === 0 && !loading && (
           <div className="text-center py-12 text-gray-400">
             <p className="text-lg">No scenarios loaded</p>
-            <Button
-              variant="outline"
-              onClick={loadScenarios}
-              className="mt-3"
-            >
+            <Button variant="outline" onClick={loadScenarios} className="mt-3">
               Load Scenarios
             </Button>
           </div>

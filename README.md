@@ -19,7 +19,7 @@
 
 # 🛡️ BankVerse
 
-### *BankVerse reduces the operational cost and customer impact of payment failures.*
+### _BankVerse reduces the operational cost and customer impact of payment failures._
 
 **Double-entry ledger • Automated reconciliation • Chaos engineering • Incident management**
 
@@ -37,13 +37,13 @@
 
 Payment failures cost businesses **2-5% of revenue** in lost customers, manual reconciliation, and compliance penalties. Most banking apps treat failures as exceptions. BankVerse treats them as **expected events** and builds the infrastructure to detect, contain, and recover from them automatically.
 
-| Problem | BankVerse Solution |
-|---------|-------------------|
-| "Where did the money go?" | **Double-entry ledger** — every paisa is accounted for. SUM(debits) === SUM(credits) enforced at transaction time. |
-| "The provider says success but we show failure" | **Automated reconciliation** — internal ledger vs provider records, with structured mismatch evidence. |
-| "1,200 failed transactions, 1,200 alerts" | **Incident correlation** — groups related failures by provider, type, and time window into single actionable incidents. |
+| Problem                                                | BankVerse Solution                                                                                                                                                        |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "Where did the money go?"                              | **Double-entry ledger** — every paisa is accounted for. SUM(debits) === SUM(credits) enforced at transaction time.                                                        |
+| "The provider says success but we show failure"        | **Automated reconciliation** — internal ledger vs provider records, with structured mismatch evidence.                                                                    |
+| "1,200 failed transactions, 1,200 alerts"              | **Incident correlation** — groups related failures by provider, type, and time window into single actionable incidents.                                                   |
 | "How do we know the system actually handles failures?" | **Chaos engineering** — 8 failure scenarios (timeout, mismatch, duplicate, missing credit, webhook disorder, provider down, bulk mismatch, race condition) run on demand. |
-| "How do we prove to auditors?" | **Append-only ledger** — entries are never modified or deleted. Reversals create new entries. Full audit trail. |
+| "How do we prove to auditors?"                         | **Append-only ledger** — entries are never modified or deleted. Reversals create new entries. Full audit trail.                                                           |
 
 ---
 
@@ -112,13 +112,13 @@ sequenceDiagram
     C->>P: Pay ₹7,500
     P->>L: Record DEBIT (customer -₹7,500)
     Note over L: ❌ CREDIT never arrives<br/>(provider webhook delayed)
-    
+
     R->>L: Fetch internal entries
     R->>R: Match vs provider records
     R->>I: DEBIT_WITHOUT_CREDIT detected
     I->>I: Create CRITICAL incident
     I->>O: Show on dashboard
-    
+
     Note over O: Operator sees incident
     O->>L: Initiate compensating CREDIT
     L->>L: CREDIT customer +₹7,500
@@ -132,10 +132,10 @@ sequenceDiagram
 
 ### Prerequisites
 
-| Tool | Version | Purpose |
-|------|---------|---------|
-| Node.js | 20+ | Runtime |
-| npm | 10+ | Package manager |
+| Tool    | Version | Purpose         |
+| ------- | ------- | --------------- |
+| Node.js | 20+     | Runtime         |
+| npm     | 10+     | Package manager |
 
 > 💡 **No API keys needed for demo mode!** Just clone, install, and run.
 
@@ -206,46 +206,46 @@ docker compose up --build
 
 ### 🛡️ Payment Reliability (Core)
 
-| Feature | Description |
-|---------|-------------|
-| **Double-Entry Ledger** | Append-only entries. SUM(debits) === SUM(credits) enforced. Reversals create new entries, never modify originals. |
-| **Automated Reconciliation** | Match internal ledger against provider records. Structured mismatch evidence (AMOUNT_MISMATCH, MISSING_INTERNAL, DEBIT_WITHOUT_CREDIT, DUPLICATE). |
-| **Dual-Dimension State Machine** | PaymentState (CREATED→PROCESSING→SUCCESS/FAILED) + SettlementState (NOT_REQUIRED→PENDING_RECONCILIATION→RECONCILING→RESOLVED/REFUNDED). |
-| **Idempotency** | Duplicate payment requests return the same transaction. No double-charges. |
-| **Chaos Engineering** | 8 failure scenarios: provider timeout, amount mismatch, duplicate charge, missing credit, webhook disorder, provider down, bulk mismatch, refund race condition. |
-| **Incident Correlation** | Groups related failures by provider + mismatch type + 5-min time window. 1,200 broken transactions = 1 incident, not 1,200. |
-| **Operations Dashboard** | Real-time KPIs: success rate, total volume, active incidents, reconciliation match rate, provider health. |
+| Feature                          | Description                                                                                                                                                      |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Double-Entry Ledger**          | Append-only entries. SUM(debits) === SUM(credits) enforced. Reversals create new entries, never modify originals.                                                |
+| **Automated Reconciliation**     | Match internal ledger against provider records. Structured mismatch evidence (AMOUNT_MISMATCH, MISSING_INTERNAL, DEBIT_WITHOUT_CREDIT, DUPLICATE).               |
+| **Dual-Dimension State Machine** | PaymentState (CREATED→PROCESSING→SUCCESS/FAILED) + SettlementState (NOT_REQUIRED→PENDING_RECONCILIATION→RECONCILING→RESOLVED/REFUNDED).                          |
+| **Idempotency**                  | Duplicate payment requests return the same transaction. No double-charges.                                                                                       |
+| **Chaos Engineering**            | 8 failure scenarios: provider timeout, amount mismatch, duplicate charge, missing credit, webhook disorder, provider down, bulk mismatch, refund race condition. |
+| **Incident Correlation**         | Groups related failures by provider + mismatch type + 5-min time window. 1,200 broken transactions = 1 incident, not 1,200.                                      |
+| **Operations Dashboard**         | Real-time KPIs: success rate, total volume, active incidents, reconciliation match rate, provider health.                                                        |
 
 ### 🔐 Authentication & Security
 
-| Feature | Description |
-|---------|-------------|
-| Email/Password Auth | Secure sign-up & sign-in via Appwrite with session management |
-| Route Protection | Middleware-based redirects — unauthenticated users can't access dashboard |
-| Demo Mode | `NEXT_PUBLIC_DEMO_MODE=true` skips auth, uses mock data |
-| Rate Limiting | In-memory rate limiter on server actions (Redis-ready) |
-| CSRF Protection | Token-based CSRF prevention on all forms |
-| Input Sanitization | XSS prevention via HTML escaping |
-| Audit Logging | Track sign-ins, transfers, and profile changes |
+| Feature             | Description                                                               |
+| ------------------- | ------------------------------------------------------------------------- |
+| Email/Password Auth | Secure sign-up & sign-in via Appwrite with session management             |
+| Route Protection    | Middleware-based redirects — unauthenticated users can't access dashboard |
+| Demo Mode           | `NEXT_PUBLIC_DEMO_MODE=true` skips auth, uses mock data                   |
+| Rate Limiting       | In-memory rate limiter on server actions (Redis-ready)                    |
+| CSRF Protection     | Token-based CSRF prevention on all forms                                  |
+| Input Sanitization  | XSS prevention via HTML escaping                                          |
+| Audit Logging       | Track sign-ins, transfers, and profile changes                            |
 
 ### 🏦 Banking & Payments
 
-| Feature | Description |
-|---------|-------------|
-| **Plaid Link** | Connect real bank accounts via Plaid sandbox |
-| **ACH Transfers** | Send money via Dwolla ACH |
-| **Razorpay UPI** | Pay via UPI apps (Google Pay, PhonePe, Paytm) with QR code |
-| **Razorpay Card** | Credit/debit card payments |
-| **Razorpay Netbanking** | Direct bank transfers via Indian netbanking |
+| Feature                 | Description                                                |
+| ----------------------- | ---------------------------------------------------------- |
+| **Plaid Link**          | Connect real bank accounts via Plaid sandbox               |
+| **ACH Transfers**       | Send money via Dwolla ACH                                  |
+| **Razorpay UPI**        | Pay via UPI apps (Google Pay, PhonePe, Paytm) with QR code |
+| **Razorpay Card**       | Credit/debit card payments                                 |
+| **Razorpay Netbanking** | Direct bank transfers via Indian netbanking                |
 
 ### 📊 Dashboard & Analytics
 
-| Feature | Description |
-|---------|-------------|
-| Total Balance | Sum across all linked accounts with count-up animation |
-| Spending by Category | Interactive doughnut chart |
-| Net Worth Trend | Line chart showing balance changes over time |
-| Recent Transactions | Latest transactions with channel badges and category tags |
+| Feature              | Description                                               |
+| -------------------- | --------------------------------------------------------- |
+| Total Balance        | Sum across all linked accounts with count-up animation    |
+| Spending by Category | Interactive doughnut chart                                |
+| Net Worth Trend      | Line chart showing balance changes over time              |
+| Recent Transactions  | Latest transactions with channel badges and category tags |
 
 ---
 
@@ -313,48 +313,48 @@ bankverse/
 
 BankVerse ships with **38 automated tests** across 6 phases:
 
-| Phase | Endpoint | Tests | What it verifies |
-|-------|----------|-------|-----------------|
-| 1 | `/api/test-ledger` | 7 | Double-entry recording, idempotency, reversals, derived balances, integrity |
-| 2 | `/api/test-payment` | 9 | State machine transitions, mock provider, full payment flow, refunds |
-| 3 | `/api/test-reconciliation` | 7 | Internal/external matching, mismatch detection, evidence generation |
-| 4 | `/api/test-chaos` | 8 | Provider timeout, amount mismatch, duplicate charge, missing credit, webhook disorder, provider down, bulk mismatch, refund race condition |
-| 5 | `/api/test-operations` | 7 | Incident detection, reconciliation incidents, operations snapshot, incident lifecycle, API endpoint, provider health, incident correlation |
-| E2E | `/api/test-debit-without-credit` | 1 | Full DEBIT_WITHOUT_CREDIT lifecycle: payment → detection → incident → recovery → resolution |
+| Phase | Endpoint                         | Tests | What it verifies                                                                                                                           |
+| ----- | -------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1     | `/api/test-ledger`               | 7     | Double-entry recording, idempotency, reversals, derived balances, integrity                                                                |
+| 2     | `/api/test-payment`              | 9     | State machine transitions, mock provider, full payment flow, refunds                                                                       |
+| 3     | `/api/test-reconciliation`       | 7     | Internal/external matching, mismatch detection, evidence generation                                                                        |
+| 4     | `/api/test-chaos`                | 8     | Provider timeout, amount mismatch, duplicate charge, missing credit, webhook disorder, provider down, bulk mismatch, refund race condition |
+| 5     | `/api/test-operations`           | 7     | Incident detection, reconciliation incidents, operations snapshot, incident lifecycle, API endpoint, provider health, incident correlation |
+| E2E   | `/api/test-debit-without-credit` | 1     | Full DEBIT_WITHOUT_CREDIT lifecycle: payment → detection → incident → recovery → resolution                                                |
 
 ---
 
 ## 🛠️ Tech Stack
 
-| Layer | Technology | Why |
-|-------|-----------|-----|
-| **Framework** | Next.js 16 (App Router) | Server components, streaming, Turbopack |
-| **Language** | TypeScript 5 (strict) | Type safety |
-| **UI** | React 19 + Tailwind CSS 3.4 + shadcn/ui | Accessible, utility-first |
-| **Forms** | react-hook-form + zod | Schema validation |
-| **Charts** | Chart.js + react-chartjs-2 | Analytics visualization |
-| **Auth** | Appwrite | Managed auth with sessions |
-| **Database** | Appwrite DB | Document database |
-| **Bank Linking** | Plaid API | Account linking + transactions |
-| **ACH Payments** | Dwolla API | US bank-to-bank transfers |
-| **UPI Payments** | Razorpay | Indian UPI, Card, Netbanking |
-| **Monitoring** | Sentry | Error tracking (client + server + edge) |
-| **CI/CD** | GitHub Actions | Lint → Build → Docker |
-| **Container** | Docker (multi-stage) | Production-ready Alpine image |
+| Layer            | Technology                              | Why                                     |
+| ---------------- | --------------------------------------- | --------------------------------------- |
+| **Framework**    | Next.js 16 (App Router)                 | Server components, streaming, Turbopack |
+| **Language**     | TypeScript 5 (strict)                   | Type safety                             |
+| **UI**           | React 19 + Tailwind CSS 3.4 + shadcn/ui | Accessible, utility-first               |
+| **Forms**        | react-hook-form + zod                   | Schema validation                       |
+| **Charts**       | Chart.js + react-chartjs-2              | Analytics visualization                 |
+| **Auth**         | Appwrite                                | Managed auth with sessions              |
+| **Database**     | Appwrite DB                             | Document database                       |
+| **Bank Linking** | Plaid API                               | Account linking + transactions          |
+| **ACH Payments** | Dwolla API                              | US bank-to-bank transfers               |
+| **UPI Payments** | Razorpay                                | Indian UPI, Card, Netbanking            |
+| **Monitoring**   | Sentry                                  | Error tracking (client + server + edge) |
+| **CI/CD**        | GitHub Actions                          | Lint → Build → Docker                   |
+| **Container**    | Docker (multi-stage)                    | Production-ready Alpine image           |
 
 ---
 
 ## 🔒 Security
 
-| Mechanism | File | Description |
-|-----------|------|-------------|
-| **Rate Limiting** | `lib/security/rate-limit.ts` | In-memory rate limiter (Redis-ready) |
-| **CSRF Protection** | `lib/security/csrf.ts` | Token-based CSRF prevention |
-| **Input Sanitization** | `lib/security/sanitize.ts` | XSS prevention |
-| **Audit Logging** | `lib/security/audit.ts` | Track sign-ins, transfers, profile changes |
-| **Middleware** | `middleware.ts` | Route protection + auth redirects |
-| **Non-root User** | `Dockerfile` | Container runs as `nextjs:nodejs` |
-| **Health Check** | `app/api/health/` | Monitoring endpoint |
+| Mechanism              | File                         | Description                                |
+| ---------------------- | ---------------------------- | ------------------------------------------ |
+| **Rate Limiting**      | `lib/security/rate-limit.ts` | In-memory rate limiter (Redis-ready)       |
+| **CSRF Protection**    | `lib/security/csrf.ts`       | Token-based CSRF prevention                |
+| **Input Sanitization** | `lib/security/sanitize.ts`   | XSS prevention                             |
+| **Audit Logging**      | `lib/security/audit.ts`      | Track sign-ins, transfers, profile changes |
+| **Middleware**         | `middleware.ts`              | Route protection + auth redirects          |
+| **Non-root User**      | `Dockerfile`                 | Container runs as `nextjs:nodejs`          |
+| **Health Check**       | `app/api/health/`            | Monitoring endpoint                        |
 
 ---
 

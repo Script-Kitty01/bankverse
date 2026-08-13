@@ -7,20 +7,21 @@ This document describes the Chaos Lab and Operations Dashboard features added in
 ## Phase 4: Chaos Lab
 
 ### Purpose
+
 Prove the system handles failure modes correctly through controlled chaos experiments.
 
 ### 8 Chaos Scenarios
 
-| # | Scenario | Severity | What It Tests |
-|---|----------|----------|---------------|
-| 1 | Provider Timeout | HIGH | Orchestrator handles provider failure gracefully |
-| 2 | Amount Mismatch | HIGH | Reconciliation detects amount discrepancies |
-| 3 | Duplicate Charge | CRITICAL | Duplicate detection and refund path |
-| 4 | Missing Credit | CRITICAL | Ledger integrity (DEBIT_WITHOUT_CREDIT) |
-| 5 | Webhook Out of Order | MEDIUM | State machine rejects invalid transitions |
-| 6 | Provider Down | HIGH | Health check and graceful degradation |
-| 7 | Slow Reconciliation | MEDIUM | Bulk reconciliation performance |
-| 8 | Refund Race Condition | MEDIUM | Settlement state transitions during refund |
+| #   | Scenario              | Severity | What It Tests                                    |
+| --- | --------------------- | -------- | ------------------------------------------------ |
+| 1   | Provider Timeout      | HIGH     | Orchestrator handles provider failure gracefully |
+| 2   | Amount Mismatch       | HIGH     | Reconciliation detects amount discrepancies      |
+| 3   | Duplicate Charge      | CRITICAL | Duplicate detection and refund path              |
+| 4   | Missing Credit        | CRITICAL | Ledger integrity (DEBIT_WITHOUT_CREDIT)          |
+| 5   | Webhook Out of Order  | MEDIUM   | State machine rejects invalid transitions        |
+| 6   | Provider Down         | HIGH     | Health check and graceful degradation            |
+| 7   | Slow Reconciliation   | MEDIUM   | Bulk reconciliation performance                  |
+| 8   | Refund Race Condition | MEDIUM   | Settlement state transitions during refund       |
 
 ### API Endpoints
 
@@ -31,11 +32,13 @@ Prove the system handles failure modes correctly through controlled chaos experi
 - `GET /api/test-chaos` — Automated verification (all 8 scenarios)
 
 ### UI
+
 - `/chaos-lab` — Interactive chaos lab with pass/fail reporting
 
 ## Phase 5: Operations Dashboard & Incidents
 
 ### Purpose
+
 Provide real-time operational visibility: KPIs, incident detection, provider health, and reconciliation status.
 
 ### Features
@@ -63,11 +66,13 @@ Provide real-time operational visibility: KPIs, incident detection, provider hea
 - `GET /api/test-operations` — Automated verification (6 tests)
 
 ### UI
+
 - `/operations` — Operations dashboard with KPIs, incidents, and provider health
 
 ## Navigation
 
 New sidebar links added:
+
 - **Operations** (`/operations`) — Operations dashboard
 - **Chaos Lab** (`/chaos-lab`) — Chaos engineering lab
 
@@ -75,18 +80,19 @@ New sidebar links added:
 
 All phases tested and passing:
 
-| Phase | Tests | Status |
-|-------|-------|--------|
-| Phase 1: Ledger | 7/7 | ✅ |
-| Phase 2: Orchestrator | 9/9 | ✅ |
-| Phase 3: Reconciliation | 7/7 | ✅ |
-| Phase 4: Chaos Lab | 8/8 | ✅ |
-| Phase 5: Operations | 6/6 | ✅ |
-| **Total** | **37/37** | **✅** |
+| Phase                   | Tests     | Status |
+| ----------------------- | --------- | ------ |
+| Phase 1: Ledger         | 7/7       | ✅     |
+| Phase 2: Orchestrator   | 9/9       | ✅     |
+| Phase 3: Reconciliation | 7/7       | ✅     |
+| Phase 4: Chaos Lab      | 8/8       | ✅     |
+| Phase 5: Operations     | 6/6       | ✅     |
+| **Total**               | **37/37** | **✅** |
 
 ## Files Created
 
 ### Phase 4
+
 - `lib/chaos/scenarios.ts` — 8 chaos scenario definitions
 - `lib/chaos/injector.ts` — Chaos injection engine
 - `app/api/chaos/route.ts` — Chaos API
@@ -97,6 +103,7 @@ All phases tested and passing:
 - `app/api/test-chaos/route.ts` — Phase 4 verification
 
 ### Phase 5
+
 - `lib/incidents/detector.ts` — Incident detection engine
 - `components/OperationsDashboard.tsx` — Operations dashboard UI
 - `app/api/operations/route.ts` — Operations API
@@ -105,5 +112,6 @@ All phases tested and passing:
 - `app/api/test-operations/route.ts` — Phase 5 verification
 
 ### Modified
+
 - `lib/payment/orchestrator.ts` — Added optional provider override for chaos testing
 - `constants/index.ts` — Added Operations and Chaos Lab sidebar links

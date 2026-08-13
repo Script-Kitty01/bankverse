@@ -57,9 +57,8 @@ export async function GET() {
   let unbalancedTxId = "";
   try {
     // Create a payment transaction directly (no ledger entries yet)
-    const { createPaymentTransaction } = await import(
-      "@/lib/ledger/repository"
-    );
+    const { createPaymentTransaction } =
+      await import("@/lib/ledger/repository");
     const unbalancedTx = await createPaymentTransaction({
       customerId: `dwc-cust2-${runId}`,
       merchantId: `dwc-merch2-${runId}`,
@@ -83,8 +82,7 @@ export async function GET() {
     });
 
     steps["2-unbalanced-debit"] = {
-      description:
-        "Created DEBIT-only transaction (simulating credit failure)",
+      description: "Created DEBIT-only transaction (simulating credit failure)",
       transactionId: unbalancedTx.id,
       debitEntryId: debitEntry.id,
       amount: 7500,
@@ -146,7 +144,11 @@ export async function GET() {
       },
     ];
 
-    const { items } = matcher.match(internalTxs, externalRecords, `rec-dwc-${runId}`);
+    const { items } = matcher.match(
+      internalTxs,
+      externalRecords,
+      `rec-dwc-${runId}`,
+    );
 
     const debitWithoutCreditItems = items.filter(
       (i) => i.mismatchType === "DEBIT_WITHOUT_CREDIT",
@@ -258,11 +260,13 @@ export async function GET() {
       entryType: "CREDIT",
       amount: 7500,
       currency: "INR",
-      description: "DEBIT_WITHOUT_CREDIT recovery — refunding customer (merchant loss tracked separately)",
+      description:
+        "DEBIT_WITHOUT_CREDIT recovery — refunding customer (merchant loss tracked separately)",
     });
 
     steps["6-recovery-compensating"] = {
-      description: "Recovery: created compensating CREDIT to balance orphaned DEBIT",
+      description:
+        "Recovery: created compensating CREDIT to balance orphaned DEBIT",
       compensatingCreditId: compensatingCredit.id,
       creditAmount: compensatingCredit.amount,
       note: "Customer refunded. Ledger now balanced. Merchant loss of ₹7500 tracked as operations incident.",
@@ -309,9 +313,7 @@ export async function GET() {
   }
 
   // ─── Summary ──────────────────────────────────────────────────
-  const allPassed = Object.values(steps).every(
-    (s: any) => !s.error,
-  );
+  const allPassed = Object.values(steps).every((s: any) => !s.error);
 
   return NextResponse.json({
     test: "DEBIT_WITHOUT_CREDIT End-to-End",

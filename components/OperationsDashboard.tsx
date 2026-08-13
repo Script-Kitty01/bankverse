@@ -109,28 +109,31 @@ export default function OperationsDashboard() {
     fetchSnapshot();
   }, [fetchSnapshot]);
 
-  const resolveIncident = useCallback(async (incidentId: string) => {
-    setResolvingId(incidentId);
-    try {
-      const res = await fetch("/api/operations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "resolve-incident",
-          incidentId,
-          resolution: "Resolved by operator",
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        fetchSnapshot();
+  const resolveIncident = useCallback(
+    async (incidentId: string) => {
+      setResolvingId(incidentId);
+      try {
+        const res = await fetch("/api/operations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "resolve-incident",
+            incidentId,
+            resolution: "Resolved by operator",
+          }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          fetchSnapshot();
+        }
+      } catch (e: any) {
+        setError(e.message);
+      } finally {
+        setResolvingId(null);
       }
-    } catch (e: any) {
-      setError(e.message);
-    } finally {
-      setResolvingId(null);
-    }
-  }, [fetchSnapshot]);
+    },
+    [fetchSnapshot],
+  );
 
   const runReconciliation = useCallback(async () => {
     setLoading(true);
@@ -163,7 +166,11 @@ export default function OperationsDashboard() {
           </p>
         </div>
         <div className="flex gap-3">
-          <Button variant="outline" onClick={runReconciliation} disabled={loading}>
+          <Button
+            variant="outline"
+            onClick={runReconciliation}
+            disabled={loading}
+          >
             Run Reconciliation
           </Button>
           <Button onClick={fetchSnapshot} disabled={loading}>
@@ -353,9 +360,7 @@ export default function OperationsDashboard() {
                         disabled={resolvingId === incident.id}
                         className="shrink-0 text-xs"
                       >
-                        {resolvingId === incident.id
-                          ? "..."
-                          : "Resolve"}
+                        {resolvingId === incident.id ? "..." : "Resolve"}
                       </Button>
                     </div>
                   </div>

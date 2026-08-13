@@ -12,7 +12,8 @@ export type MatchStatus =
   | "MATCHED_EXACT"
   | "MATCHED_FUZZY"
   | "MISMATCHED"
-  | "UNMATCHED";
+  | "UNMATCHED"
+  | "AMBIGUOUS_MATCH";
 
 export type MismatchType =
   | "AMOUNT_MISMATCH"
@@ -22,6 +23,7 @@ export type MismatchType =
   | "TIMING_DIFFERENCE"
   | "CURRENCY_MISMATCH"
   | "DEBIT_WITHOUT_CREDIT"
+  | "AMBIGUOUS_CANDIDATES"
   | "UNKNOWN";
 
 export type MatchMethod = "EXACT" | "FUZZY" | "MANUAL";
@@ -99,6 +101,10 @@ export interface ExternalRecord {
   timestamp: string;
   status: string;
   description?: string;
+  /** Payment method (upi, card, netbanking, etc.) for multi-dimensional matching */
+  method?: string;
+  /** Counterparty identifier (customer or merchant) for multi-dimensional matching */
+  counterpartyId?: string;
   metadata?: Record<string, string>;
 }
 

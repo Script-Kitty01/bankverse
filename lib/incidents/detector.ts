@@ -6,7 +6,10 @@
  * Groups related mismatches into actionable incidents.
  */
 
-import type { ReconciliationItem, ReconciliationReport } from "@/lib/reconciliation/types";
+import type {
+  ReconciliationItem,
+  ReconciliationReport,
+} from "@/lib/reconciliation/types";
 import type { PaymentTransaction } from "@/lib/ledger/types";
 import { IncidentCorrelator } from "./correlator";
 
@@ -22,7 +25,14 @@ export type IncidentStatus =
 
 export interface IncidentTimelineEvent {
   timestamp: string;
-  event: "DETECTED" | "ESCALATED" | "MERGED" | "INVESTIGATING" | "ACTION_REQUIRED" | "RESOLVED" | "DISMISSED";
+  event:
+    | "DETECTED"
+    | "ESCALATED"
+    | "MERGED"
+    | "INVESTIGATING"
+    | "ACTION_REQUIRED"
+    | "RESOLVED"
+    | "DISMISSED";
   detail: string;
 }
 
@@ -88,7 +98,9 @@ function pruneIncidents(): void {
   // Remove oldest resolved/dismissed first
   const closed = incidents
     .map((inc, idx) => ({ inc, idx }))
-    .filter(({ inc }) => inc.status === "RESOLVED" || inc.status === "DISMISSED")
+    .filter(
+      ({ inc }) => inc.status === "RESOLVED" || inc.status === "DISMISSED",
+    )
     .sort(
       (a, b) =>
         new Date(a.inc.detectedAt).getTime() -
@@ -216,7 +228,11 @@ export class IncidentDetector {
       // Alert if failure rate > 20% and at least 3 failures
       if (failureRate > 0.2 && failed.length >= 3) {
         const severity: IncidentSeverity =
-          failureRate > 0.5 ? "CRITICAL" : failureRate > 0.35 ? "HIGH" : "MEDIUM";
+          failureRate > 0.5
+            ? "CRITICAL"
+            : failureRate > 0.35
+              ? "HIGH"
+              : "MEDIUM";
 
         const totalAmount = failed.reduce((sum, t) => sum + t.amount, 0);
 
@@ -346,13 +362,9 @@ export class IncidentDetector {
     // ─── Operational Metrics ──────────────────────────────────
 
     // Auto-resolution rate: resolved incidents that were never escalated to ACTION_REQUIRED
-    const resolvedIncidents = incidents.filter(
-      (i) => i.status === "RESOLVED",
-    );
+    const resolvedIncidents = incidents.filter((i) => i.status === "RESOLVED");
     const autoResolved = resolvedIncidents.filter((i) => {
-      const hadManual = i.timeline.some(
-        (e) => e.event === "ACTION_REQUIRED",
-      );
+      const hadManual = i.timeline.some((e) => e.event === "ACTION_REQUIRED");
       return !hadManual;
     });
     const autoResolutionRate =
@@ -360,9 +372,7 @@ export class IncidentDetector {
         ? autoResolved.length / resolvedIncidents.length
         : 0;
     const manualInterventionRate =
-      resolvedIncidents.length > 0
-        ? 1 - autoResolutionRate
-        : 0;
+      resolvedIncidents.length > 0 ? 1 - autoResolutionRate : 0;
 
     // MTTR: mean time to resolve in milliseconds
     const resolvedWithTimes = resolvedIncidents.filter(
@@ -408,7 +418,9 @@ export class IncidentDetector {
         matchRate: reconciliationReport?.summary.matchRate || 0,
         pendingItems:
           reconciliationReport?.items.filter(
-            (i) => i.matchStatus !== "MATCHED_EXACT" && i.matchStatus !== "MATCHED_FUZZY",
+            (i) =>
+              i.matchStatus !== "MATCHED_EXACT" &&
+              i.matchStatus !== "MATCHED_FUZZY",
           ).length || 0,
       },
       providerHealth: providerHealth || {},

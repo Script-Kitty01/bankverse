@@ -14,11 +14,7 @@ import {
   LEDGER_ENTRIES_COLLECTION_ID,
   PAYMENT_TRANSACTIONS_COLLECTION_ID,
 } from "@/lib/appwrite/config";
-import type {
-  LedgerAccount,
-  LedgerEntry,
-  PaymentTransaction,
-} from "./types";
+import type { LedgerAccount, LedgerEntry, PaymentTransaction } from "./types";
 
 // ─── Helpers ────────────────────────────────────────────────────
 
@@ -79,9 +75,11 @@ export async function findAccount(
     id: doc.$id,
     userId: doc.userId,
     currency: doc.currency,
+    accountType: doc.accountType ?? "CUSTOMER",
     totalDebits: doc.totalDebits,
     totalCredits: doc.totalCredits,
     derivedBalance: doc.derivedBalance,
+    version: doc.version ?? 1,
     createdAt: doc.$createdAt,
     updatedAt: doc.$updatedAt,
   };
@@ -90,15 +88,18 @@ export async function findAccount(
 export async function createAccount(
   userId: string,
   currency: string,
+  accountType: LedgerAccount["accountType"] = "CUSTOMER",
 ): Promise<LedgerAccount> {
   if (isDemoMode()) {
     const account: LedgerAccount = {
       id: generateId("lacct"),
       userId,
       currency,
+      accountType,
       totalDebits: 0,
       totalCredits: 0,
       derivedBalance: 0,
+      version: 1,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -111,13 +112,22 @@ export async function createAccount(
     DATABASE_ID,
     LEDGER_ACCOUNTS_COLLECTION_ID,
     ID.unique(),
-    { userId, currency, totalDebits: 0, totalCredits: 0, derivedBalance: 0 },
+    {
+      userId,
+      currency,
+      accountType,
+      totalDebits: 0,
+      totalCredits: 0,
+      derivedBalance: 0,
+      version: 1,
+    },
   );
 
   return {
     id: doc.$id,
     userId: doc.userId,
     currency: doc.currency,
+    accountType: doc.accountType ?? "CUSTOMER",
     totalDebits: doc.totalDebits,
     totalCredits: doc.totalCredits,
     derivedBalance: doc.derivedBalance,
@@ -144,6 +154,7 @@ export async function getAccountById(
       id: doc.$id,
       userId: doc.userId,
       currency: doc.currency,
+      accountType: doc.accountType ?? "CUSTOMER",
       totalDebits: doc.totalDebits,
       totalCredits: doc.totalCredits,
       derivedBalance: doc.derivedBalance,
@@ -210,21 +221,34 @@ export async function createPaymentTransaction(data: {
   currency: string;
   provider: string;
   providerReference: string;
+  providerOrderId?: string;
   idempotencyKey: string;
+  method?: string;
+  bank?: string;
 }): Promise<PaymentTransaction> {
+  // Idempotency concurrency: check for existing BEFORE creating (atomic in demo mode)
   if (isDemoMode()) {
+    const existing = demoStore.paymentTransactions.find(
+      (t) => t.idempotencyKey === data.idempotencyKey,
+    );
+    if (existing) return existing;
+
     const tx: PaymentTransaction = {
       id: generateId("ptx"),
       customerId: data.customerId,
       merchantId: data.merchantId,
       amount: data.amount,
       currency: data.currency,
+      method: data.method,
+      bank: data.bank,
       paymentState: "PROCESSING",
       settlementState: "NOT_REQUIRED",
       provider: data.provider,
+      providerOrderId: data.providerOrderId,
       providerReference: data.providerReference,
       idempotencyKey: data.idempotencyKey,
       retryCount: 0,
+      version: 1,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -233,6 +257,17 @@ export async function createPaymentTransaction(data: {
   }
 
   const db = getDb();
+  // Check for existing by idempotencyKey before creating (best-effort uniqueness)
+  const existing = await db.listDocuments(
+    DATABASE_ID,
+    PAYMENT_TRANSACTIONS_COLLECTION_ID,
+    [Query.equal("idempotencyKey", data.idempotencyKey), Query.limit(1)],
+  );
+  if (existing.documents.length > 0) {
+    const doc = existing.documents[0];
+    return mapDocToTransaction(doc);
+  }
+
   const doc = await db.createDocument(
     DATABASE_ID,
     PAYMENT_TRANSACTIONS_COLLECTION_ID,
@@ -242,27 +277,41 @@ export async function createPaymentTransaction(data: {
       merchantId: data.merchantId,
       amount: data.amount,
       currency: data.currency,
+      method: data.method,
+      bank: data.bank,
       paymentState: "PROCESSING",
       settlementState: "NOT_REQUIRED",
       provider: data.provider,
+      providerOrderId: data.providerOrderId,
       providerReference: data.providerReference,
       idempotencyKey: data.idempotencyKey,
       retryCount: 0,
     },
   );
 
+  return mapDocToTransaction(doc);
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapDocToTransaction(doc: any): PaymentTransaction {
   return {
     id: doc.$id,
     customerId: doc.customerId,
     merchantId: doc.merchantId,
     amount: doc.amount,
     currency: doc.currency,
+    method: doc.method,
+    bank: doc.bank,
     paymentState: doc.paymentState,
     settlementState: doc.settlementState,
     provider: doc.provider,
+    providerOrderId: doc.providerOrderId,
+    providerPaymentId: doc.providerPaymentId,
+    providerRefundId: doc.providerRefundId,
     providerReference: doc.providerReference,
     idempotencyKey: doc.idempotencyKey,
-    retryCount: doc.retryCount,
+    retryCount: doc.retryCount ?? 0,
+    version: doc.version ?? 1,
     createdAt: doc.$createdAt,
     updatedAt: doc.$updatedAt,
   };
@@ -282,21 +331,7 @@ export async function getPaymentTransactionById(
       PAYMENT_TRANSACTIONS_COLLECTION_ID,
       id,
     );
-    return {
-      id: doc.$id,
-      customerId: doc.customerId,
-      merchantId: doc.merchantId,
-      amount: doc.amount,
-      currency: doc.currency,
-      paymentState: doc.paymentState,
-      settlementState: doc.settlementState,
-      provider: doc.provider,
-      providerReference: doc.providerReference,
-      idempotencyKey: doc.idempotencyKey,
-      retryCount: doc.retryCount ?? 0,
-      createdAt: doc.$createdAt,
-      updatedAt: doc.$updatedAt,
-    };
+    return mapDocToTransaction(doc);
   } catch {
     return null;
   }
@@ -321,61 +356,85 @@ export async function getPaymentTransactionByIdempotencyKey(
 
   if (result.documents.length === 0) return null;
 
-  const doc = result.documents[0];
-  return {
-    id: doc.$id,
-    customerId: doc.customerId,
-    merchantId: doc.merchantId,
-    amount: doc.amount,
-    currency: doc.currency,
-    paymentState: doc.paymentState,
-    settlementState: doc.settlementState,
-    provider: doc.provider,
-    providerReference: doc.providerReference,
-    idempotencyKey: doc.idempotencyKey,
-    retryCount: doc.retryCount ?? 0,
-    createdAt: doc.$createdAt,
-    updatedAt: doc.$updatedAt,
-  };
+  return mapDocToTransaction(result.documents[0]);
 }
 
 export async function updatePaymentTransactionState(
   id: string,
   paymentState: PaymentTransaction["paymentState"],
   settlementState: PaymentTransaction["settlementState"],
+  extra?: {
+    providerPaymentId?: string;
+    providerRefundId?: string;
+    retryCount?: number;
+  },
+  expectedVersion?: number,
 ): Promise<PaymentTransaction | null> {
   if (isDemoMode()) {
     const tx = demoStore.paymentTransactions.find((t) => t.id === id);
     if (!tx) return null;
+
+    // OCC Check in Demo Mode
+    if (expectedVersion !== undefined && tx.version !== expectedVersion) {
+      throw new Error(
+        `OCC Conflict: Transaction ${id} version mismatch. Expected ${expectedVersion}, got ${tx.version}`,
+      );
+    }
+
     tx.paymentState = paymentState;
     tx.settlementState = settlementState;
+    tx.version = (tx.version ?? 1) + 1;
+    if (extra?.providerPaymentId)
+      tx.providerPaymentId = extra.providerPaymentId;
+    if (extra?.providerRefundId) tx.providerRefundId = extra.providerRefundId;
+    if (extra?.retryCount !== undefined) tx.retryCount = extra.retryCount;
     tx.updatedAt = new Date().toISOString();
     return tx;
   }
 
   const db = getDb();
+
+  // OCC Check in Appwrite/DB mode
+  if (expectedVersion !== undefined) {
+    const existingDoc = await db.getDocument(
+      DATABASE_ID,
+      PAYMENT_TRANSACTIONS_COLLECTION_ID,
+      id,
+    );
+    const currentVersion = existingDoc.version ?? 1;
+    if (currentVersion !== expectedVersion) {
+      throw new Error(
+        `OCC Conflict: Transaction ${id} version mismatch. Expected ${expectedVersion}, got ${currentVersion}`,
+      );
+    }
+  }
+
+  const currentDoc = await db.getDocument(
+    DATABASE_ID,
+    PAYMENT_TRANSACTIONS_COLLECTION_ID,
+    id,
+  );
+  const nextVersion = (currentDoc.version ?? 1) + 1;
+
+  const updateData: Record<string, unknown> = {
+    paymentState,
+    settlementState,
+    version: nextVersion,
+  };
+  if (extra?.providerPaymentId)
+    updateData.providerPaymentId = extra.providerPaymentId;
+  if (extra?.providerRefundId)
+    updateData.providerRefundId = extra.providerRefundId;
+  if (extra?.retryCount !== undefined) updateData.retryCount = extra.retryCount;
+
   const doc = await db.updateDocument(
     DATABASE_ID,
     PAYMENT_TRANSACTIONS_COLLECTION_ID,
     id,
-    { paymentState, settlementState },
+    updateData,
   );
 
-  return {
-    id: doc.$id,
-    customerId: doc.customerId,
-    merchantId: doc.merchantId,
-    amount: doc.amount,
-    currency: doc.currency,
-    paymentState: doc.paymentState,
-    settlementState: doc.settlementState,
-    provider: doc.provider,
-    providerReference: doc.providerReference,
-    idempotencyKey: doc.idempotencyKey,
-    retryCount: doc.retryCount ?? 0,
-    createdAt: doc.$createdAt,
-    updatedAt: doc.$updatedAt,
-  };
+  return mapDocToTransaction(doc);
 }
 
 export async function getAllPaymentTransactions(
@@ -393,21 +452,7 @@ export async function getAllPaymentTransactions(
     [Query.orderDesc("$createdAt"), Query.limit(limit), Query.offset(offset)],
   );
 
-  return result.documents.map((doc) => ({
-    id: doc.$id,
-    customerId: doc.customerId,
-    merchantId: doc.merchantId,
-    amount: doc.amount,
-    currency: doc.currency,
-    paymentState: doc.paymentState,
-    settlementState: doc.settlementState,
-    provider: doc.provider,
-    providerReference: doc.providerReference,
-    idempotencyKey: doc.idempotencyKey,
-    retryCount: doc.retryCount ?? 0,
-    createdAt: doc.$createdAt,
-    updatedAt: doc.$updatedAt,
-  }));
+  return result.documents.map(mapDocToTransaction);
 }
 
 // ─── Ledger Entry CRUD ──────────────────────────────────────────

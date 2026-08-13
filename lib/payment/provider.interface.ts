@@ -62,6 +62,23 @@ export interface RefundPaymentResult {
   error?: string;
 }
 
+export interface GetPaymentStatusParams {
+  orderId: string;
+}
+
+export interface GetPaymentStatusResult {
+  success: boolean;
+  status:
+    | "created"
+    | "authorized"
+    | "captured"
+    | "failed"
+    | "refunded"
+    | "unknown";
+  paymentId?: string;
+  error?: string;
+}
+
 export interface PaymentProvider {
   readonly config: PaymentProviderConfig;
 
@@ -76,6 +93,11 @@ export interface PaymentProvider {
 
   /** Refund a captured payment */
   refundPayment(params: RefundPaymentParams): Promise<RefundPaymentResult>;
+
+  /** Query the provider for the current status of a payment */
+  getPaymentStatus(
+    params: GetPaymentStatusParams,
+  ): Promise<GetPaymentStatusResult>;
 
   /** Health check — is the provider reachable? */
   healthCheck(): Promise<boolean>;
