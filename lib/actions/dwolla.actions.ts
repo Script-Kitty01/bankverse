@@ -87,6 +87,18 @@ export const createTransfer = async (params: {
   description?: string;
 }) => {
   try {
+    const isDemo =
+      process.env.NEXT_PUBLIC_DEMO_MODE === "true" ||
+      !process.env.DWOLLA_KEY ||
+      !process.env.DWOLLA_SECRET;
+
+    if (isDemo) {
+      return {
+        success: true,
+        transferUrl: `https://api-sandbox.dwolla.com/transfers/transfer_demo_${Date.now()}`,
+      };
+    }
+
     const dwollaClient = createDwollaClient();
 
     const requestBody = {

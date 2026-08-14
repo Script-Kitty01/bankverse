@@ -18,6 +18,9 @@ const ibmPlexSerif = IBM_Plex_Serif({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_SITE_URL || "https://bankverse.vercel.app"
+  ),
   title: {
     default: "BankVerse — Modern Banking Platform",
     template: "%s | BankVerse",

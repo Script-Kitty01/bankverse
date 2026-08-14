@@ -6,6 +6,8 @@ import { getAccounts } from "@/lib/actions/plaid.actions";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "My Banks",
   description: "View and manage all your connected bank accounts in one place.",

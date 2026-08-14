@@ -1,7 +1,7 @@
-import Image from "next/image";
-import Link from "next/link";
 import React from "react";
+import Image from "next/image";
 import BankCard from "./BankCard";
+import AddBankModal from "./AddBankModal";
 
 const RightSidebar = ({ user, transactions, banks }: RightSidebarProps) => {
   void transactions;
@@ -23,17 +23,21 @@ const RightSidebar = ({ user, transactions, banks }: RightSidebarProps) => {
           </div>
         </div>
       </section>
+
       <section className="banks">
-        <div className="flex w-full justify-between">
+        <div className="flex w-full items-center justify-between">
           <h2 className="header-2">My Banks</h2>
-          <Link href="/" className="flex gap-2">
-            <Image src="/icons/plus.svg" alt="plus" width={20} height={20} />
-            <h2 className="text-14 font-semibold text-gray-600">Add Bank</h2>
-          </Link>
+          <AddBankModal>
+            <div className="flex gap-2 items-center hover:opacity-80 transition-opacity">
+              <Image src="/icons/plus.svg" alt="plus" width={20} height={20} />
+              <h2 className="text-14 font-semibold text-gray-600">Add Bank</h2>
+            </div>
+          </AddBankModal>
         </div>
+
         {banks?.length > 0 && (
-          <div className="relative flex-1 flex flex-col items-center justify-center gap-5">
-            <div className="relative z-10">
+          <div className="relative flex-1 flex flex-col items-center justify-center gap-5 mt-4">
+            <div className="relative z-10 w-full">
               <BankCard
                 key={banks[0].id}
                 account={banks[0]}

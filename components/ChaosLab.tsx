@@ -29,6 +29,9 @@ interface ChaosTestResult {
   injectDescription: string;
   expectedBehavior: string;
   actualBehavior: string;
+  invariant?: string;
+  invariantHeld?: boolean;
+  invariantVerification?: string;
   details: Record<string, unknown>;
   duration: number;
 }

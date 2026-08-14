@@ -4,6 +4,7 @@ import { createPlaidClient } from "@/lib/plaid/config";
 import { createBankDocument, getBanksByUserId } from "@/lib/appwrite/db";
 import { getCurrentUser } from "./user.actions";
 import { CountryCode, Products } from "plaid";
+import { cookies } from "next/headers";
 
 /**
  * Create a Plaid Link token for a user.
@@ -79,45 +80,122 @@ export const exchangePublicToken = async (publicToken: string) => {
 };
 
 /**
- * Get all accounts for the current user from Plaid.
+ * Add a custom / simulated bank account for the user.
+ * Persists in a secure HTTP-only cookie and Appwrite DB if configured.
+ */
+export const addCustomBank = async (params: {
+  bankName: string;
+  accountType?: "checking" | "savings" | "credit" | "investment";
+  balance?: number;
+  mask?: string;
+  officialName?: string;
+}) => {
+  try {
+    const user = await getCurrentUser();
+    if (!user) return { success: false, error: "Not authenticated." };
+
+    const cookieStore = await cookies();
+    const existingCookie = cookieStore.get("bankverse_custom_banks")?.value;
+    let customBanks: Account[] = [];
+
+    if (existingCookie) {
+      try {
+        customBanks = JSON.parse(existingCookie);
+      } catch {
+        customBanks = [];
+      }
+    }
+
+    const randomMask =
+      params.mask || Math.floor(1000 + Math.random() * 9000).toString();
+    const numBalance = params.balance || 5000;
+    const acctType = params.accountType || "checking";
+    const timestamp = Date.now();
+
+    const newAccount: Account = {
+      id: `custom-acc-${timestamp}`,
+      availableBalance: numBalance,
+      currentBalance: numBalance + 250,
+      officialName:
+        params.officialName ||
+        `${params.bankName} ${acctType.charAt(0).toUpperCase() + acctType.slice(1)}`,
+      mask: randomMask,
+      institutionId: `ins_custom_${timestamp}`,
+      name: `${params.bankName} ${acctType.charAt(0).toUpperCase() + acctType.slice(1)}`,
+      type: acctType === "credit" ? "credit" : "depository",
+      subtype: acctType,
+      appwriteItemId: `custom-bank-${timestamp}`,
+      sharableId: `custom-share-${timestamp}`,
+    };
+
+    customBanks.push(newAccount);
+
+    cookieStore.set("bankverse_custom_banks", JSON.stringify(customBanks), {
+      maxAge: 60 * 60 * 24 * 30, // 30 days
+      path: "/",
+    });
+
+    return { success: true, account: newAccount };
+  } catch (error) {
+    console.error("addCustomBank error:", error);
+    return { success: false, error: "Failed to add bank account." };
+  }
+};
+
+/**
+ * Get all accounts for the current user from Plaid & Custom links.
  */
 export const getAccounts = async () => {
   try {
     const user = await getCurrentUser();
     if (!user) return { success: false, error: "Not authenticated." };
 
-    // Return mock accounts in demo mode
+    const cookieStore = await cookies();
+    const customCookie = cookieStore.get("bankverse_custom_banks")?.value;
+    let customAccounts: Account[] = [];
+    if (customCookie) {
+      try {
+        customAccounts = JSON.parse(customCookie);
+      } catch {
+        customAccounts = [];
+      }
+    }
+
+    // Base demo accounts
+    const baseAccounts: Account[] = [
+      {
+        id: "demo-acc-001",
+        availableBalance: 4520.5,
+        currentBalance: 4820.5,
+        officialName: "Chase Checking",
+        mask: "1234",
+        institutionId: "ins_1",
+        name: "Chase Checking",
+        type: "depository",
+        subtype: "checking",
+        appwriteItemId: "demo-bank-001",
+        sharableId: "demo-share-001",
+      },
+      {
+        id: "demo-acc-002",
+        availableBalance: 12350.75,
+        currentBalance: 12800.75,
+        officialName: "Wells Fargo Savings",
+        mask: "5678",
+        institutionId: "ins_2",
+        name: "Wells Fargo Savings",
+        type: "depository",
+        subtype: "savings",
+        appwriteItemId: "demo-bank-002",
+        sharableId: "demo-share-002",
+      },
+    ];
+
+    // Return mock & custom accounts in demo mode
     if (process.env.NEXT_PUBLIC_DEMO_MODE === "true") {
       return {
         success: true,
-        accounts: [
-          {
-            id: "demo-acc-001",
-            availableBalance: 4520.5,
-            currentBalance: 4820.5,
-            officialName: "Chase Checking",
-            mask: "1234",
-            institutionId: "ins_1",
-            name: "Chase Checking",
-            type: "depository",
-            subtype: "checking",
-            appwriteItemId: "demo-bank-001",
-            sharableId: "demo-share-001",
-          },
-          {
-            id: "demo-acc-002",
-            availableBalance: 12350.75,
-            currentBalance: 12800.75,
-            officialName: "Wells Fargo Savings",
-            mask: "5678",
-            institutionId: "ins_2",
-            name: "Wells Fargo Savings",
-            type: "depository",
-            subtype: "savings",
-            appwriteItemId: "demo-bank-002",
-            sharableId: "demo-share-002",
-          },
-        ],
+        accounts: [...baseAccounts, ...customAccounts],
       };
     }
 

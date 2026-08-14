@@ -276,6 +276,7 @@ export class ChaosInjector {
       merchantId: `merch_custom_${Date.now()}`,
       amount: 3500,
       currency: "INR",
+      method: "upi",
       description: `Custom scenario: ${scenario.name}`,
     });
 

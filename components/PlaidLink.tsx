@@ -1,115 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { usePlaidLink, PlaidLinkOnSuccess } from "react-plaid-link";
-import { Button } from "@/components/ui/button";
-import {
-  createLinkToken,
-  exchangePublicToken,
-} from "@/lib/actions/plaid.actions";
-import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import AddBankModal from "./AddBankModal";
 
-const PlaidDisabledMessage = () => (
-  <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-gray-300 bg-white/60 backdrop-blur-md p-8 text-center shadow-sm">
-    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
-      <Loader2 size={24} className="text-gray-400" />
-    </div>
-    <p className="text-14 font-medium text-gray-600">
-      Bank account linking via Plaid is not available in your region.
-    </p>
-    <p className="text-12 text-gray-400">
-      You can still use Razorpay for UPI, card, and netbanking payments.
-    </p>
-  </div>
-);
-
-const PlaidLinkInner = ({ user }: { user: { success: boolean } }) => {
+const PlaidLink = ({ user }: { user?: unknown }) => {
   void user;
-  const router = useRouter();
-  const [linkToken, setLinkToken] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const fetchLinkToken = async () => {
-      try {
-        const result = await createLinkToken();
-        if (result.success && result.linkToken) {
-          setLinkToken(result.linkToken);
-        } else if ("error" in result) {
-          setError(result.error ?? "Failed to initialize bank linking.");
-        }
-      } catch {
-        setError("Failed to initialize bank linking.");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchLinkToken();
-  }, []);
-
-  const onSuccess = useCallback<PlaidLinkOnSuccess>(
-    async (publicToken) => {
-      if (!publicToken) return;
-      const result = await exchangePublicToken(publicToken);
-      if (result.success) {
-        router.push("/");
-      }
-    },
-    [router],
-  );
-
-  const { open, ready } = usePlaidLink({
-    token: linkToken ?? "",
-    onSuccess,
-  });
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center gap-2 py-4">
-        <Loader2 size={20} className="animate-spin" />
-        <span className="text-14 text-gray-600">
-          Preparing bank connection...
-        </span>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="rounded-md bg-red-50 p-3 text-sm text-red-600 border border-red-200">
-        {error}
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col gap-4">
       <p className="text-14 text-gray-600">
-        Connect your bank account to get started with BankVerse. We use Plaid to
-        securely link your accounts.
+        Connect your bank account to get started with BankVerse. Link your checking or savings accounts securely.
       </p>
-      <Button
-        onClick={() => open()}
-        disabled={!ready}
-        className="form-btn bg-bankGradient"
-      >
-        Connect Bank Account
-      </Button>
+      <AddBankModal buttonText="Connect Bank Account" className="w-full justify-center" />
     </div>
   );
-};
-
-const PlaidLink = ({ user }: { user: { success: boolean } }) => {
-  const plaidEnabled = process.env.NEXT_PUBLIC_PLAID_ENABLED !== "false";
-
-  if (!plaidEnabled) {
-    return <PlaidDisabledMessage />;
-  }
-
-  return <PlaidLinkInner user={user} />;
 };
 
 export default PlaidLink;

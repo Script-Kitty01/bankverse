@@ -10,9 +10,9 @@ import { LogOut } from "lucide-react";
 const Sidebar = ({ user }: SidebarProps) => {
   const pathname = usePathname();
   return (
-    <section className="sidebar">
-      <nav className="flex flex-col gap-4">
-        <Link href="/" className="mb-12 cursor-pointer flex items-center gap-2">
+    <section className="sidebar flex flex-col justify-between overflow-y-auto no-scrollbar">
+      <nav className="flex flex-col gap-2 xl:gap-3">
+        <Link href="/" className="mb-4 cursor-pointer flex items-center gap-2">
           <Image
             src="/icons/logo.svg"
             width={34}
