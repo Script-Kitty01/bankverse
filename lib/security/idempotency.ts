@@ -132,6 +132,23 @@ export class IdempotencyManager {
     const existingTx =
       await getPaymentTransactionByIdempotencyKey(idempotencyKey);
     if (existingTx) {
+      if (requestParams && expectedHash) {
+        const existingTxParams: Record<string, unknown> = {
+          customerId: existingTx.customerId,
+          merchantId: existingTx.merchantId,
+          amount: existingTx.amount,
+          currency: existingTx.currency,
+          provider: existingTx.provider,
+        };
+        if ("method" in requestParams) existingTxParams.method = existingTx.method;
+        if ("bank" in requestParams) existingTxParams.bank = existingTx.bank;
+
+        const existingHash = computeRequestHash(existingTxParams);
+        if (existingHash !== expectedHash) {
+          throw new Error("IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_REQUEST");
+        }
+      }
+
       const dbResult: CachedIdempotencyResult = {
         transaction: existingTx,
         cachedAt: new Date().toISOString(),

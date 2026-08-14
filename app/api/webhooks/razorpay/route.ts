@@ -126,12 +126,12 @@ export async function POST(request: Request) {
     }
 
     const body = JSON.parse(rawBody) as RazorpayWebhookPayload;
-    const { event, payload: webhookPayload } = body;
+    const { event, payload: webhookPayload } = body || {};
 
     // ── Idempotency Check ───────────────────────────────────────
     const eventId =
       request.headers.get("x-razorpay-event-id") ||
-      `${event}_${webhookPayload.payment?.entity?.id || webhookPayload.order?.entity?.id}_${Date.now()}`;
+      `${event}_${webhookPayload?.payment?.entity?.id || webhookPayload?.order?.entity?.id || Date.now()}_${Date.now()}`;
 
     const existingEvent = webhookEventStore.get(eventId);
     if (existingEvent && existingEvent.status === "PROCESSED") {
@@ -153,9 +153,9 @@ export async function POST(request: Request) {
 
     // ── Extract transaction reference ───────────────────────────
     const orderId =
-      webhookPayload.order?.entity?.id ||
-      webhookPayload.payment?.entity?.order_id;
-    const paymentId = webhookPayload.payment?.entity?.id;
+      webhookPayload?.order?.entity?.id ||
+      webhookPayload?.payment?.entity?.order_id;
+    const paymentId = webhookPayload?.payment?.entity?.id || "";
 
     if (!orderId) {
       webhookEventStore.set(eventId, {

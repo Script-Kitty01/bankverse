@@ -31,15 +31,36 @@ export function sanitizeName(name: string): string {
  * Sanitize an object's string values recursively.
  */
 export function sanitizeObject<T extends Record<string, unknown>>(obj: T): T {
+  if (Array.isArray(obj)) {
+    return obj.map((item) =>
+      typeof item === "string"
+        ? sanitizeString(item)
+        : typeof item === "object" && item !== null
+        ? sanitizeObject(item as Record<string, unknown>)
+        : item,
+    ) as unknown as T;
+  }
+
   const sanitized = { ...obj };
   for (const key in sanitized) {
-    if (typeof sanitized[key] === "string") {
-      (sanitized as Record<string, unknown>)[key] = sanitizeString(
-        sanitized[key] as string,
+    const val = sanitized[key];
+    if (typeof val === "string") {
+      (sanitized as Record<string, unknown>)[key] = sanitizeString(val);
+    } else if (Array.isArray(val)) {
+      (sanitized as Record<string, unknown>)[key] = val.map((item) =>
+        typeof item === "string"
+          ? sanitizeString(item)
+          : typeof item === "object" && item !== null
+          ? sanitizeObject(item as Record<string, unknown>)
+          : item,
       );
-    } else if (typeof sanitized[key] === "object" && sanitized[key] !== null) {
+    } else if (
+      typeof val === "object" &&
+      val !== null &&
+      val.constructor === Object
+    ) {
       (sanitized as Record<string, unknown>)[key] = sanitizeObject(
-        sanitized[key] as Record<string, unknown>,
+        val as Record<string, unknown>,
       );
     }
   }

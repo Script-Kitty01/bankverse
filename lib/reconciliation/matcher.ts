@@ -225,16 +225,19 @@ export class ReconciliationMatcher {
     candidates.sort((a, b) => b.confidence - a.confidence);
 
     // Ambiguity detection: if top 2 candidates are within 0.1 confidence of each other
-    if (
-      candidates.length >= 2 &&
-      candidates[0].confidence - candidates[1].confidence < 0.1
-    ) {
-      return {
-        match: null,
-        ambiguous: true,
-        confidence: 0,
-        candidates: candidates.map((c) => c.ext),
-      };
+    if (candidates.length >= 2) {
+      const diff =
+        Math.round(
+          (candidates[0].confidence - candidates[1].confidence) * 10000,
+        ) / 10000;
+      if (diff <= 0.1) {
+        return {
+          match: null,
+          ambiguous: true,
+          confidence: 0,
+          candidates: candidates.map((c) => c.ext),
+        };
+      }
     }
 
     return {

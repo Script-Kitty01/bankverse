@@ -3,7 +3,7 @@
 import Razorpay from "razorpay";
 import { createPaymentRecord } from "@/lib/supabase/db";
 import { getCurrentUser } from "./user.actions";
-import { recordTransaction } from "@/lib/ledger/ledger.service";
+import { recordTransaction, settleToMerchant } from "@/lib/ledger/ledger.service";
 import crypto from "crypto";
 
 /**
@@ -141,7 +141,7 @@ export const recordRazorpayPayment = async (params: {
     //    DEBIT the customer (money leaves their account)
     //    CREDIT the merchant (money enters the merchant account)
     const idempotencyKey = `rzp_${params.razorpayPaymentId}`;
-    await recordTransaction({
+    const recordResult = await recordTransaction({
       customerId: userId,
       merchantId: "bankverse_merchant",
       amount: params.amount,
@@ -151,6 +151,10 @@ export const recordRazorpayPayment = async (params: {
       idempotencyKey,
       description: params.description,
     });
+
+    if (recordResult.transaction) {
+      await settleToMerchant(recordResult.transaction.id);
+    }
 
     return { success: true, payment };
   } catch (error) {

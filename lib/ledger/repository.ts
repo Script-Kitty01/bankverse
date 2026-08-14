@@ -28,7 +28,7 @@ export async function runWithEntityLock<T>(key: string, fn: () => Promise<T>): P
   const nextLock = new Promise<void>((resolve) => {
     releaseLock = resolve;
   });
-  entityLocks.set(key, currentLock.then(() => nextLock));
+  entityLocks.set(key, currentLock.catch(() => {}).then(() => nextLock));
 
   try {
     await currentLock;
