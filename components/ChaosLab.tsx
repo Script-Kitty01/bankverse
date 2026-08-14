@@ -7,7 +7,7 @@
  * Shows pass/fail results with severity badges and timing.
  */
 
-import { useState, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 
 // ─── Types ──────────────────────────────────────────────────────
@@ -128,9 +128,9 @@ export default function ChaosLab() {
   }, []);
 
   // Load scenarios on mount
-  useState(() => {
+  useEffect(() => {
     loadScenarios();
-  });
+  }, [loadScenarios]);
 
   return (
     <div className="space-y-6">
