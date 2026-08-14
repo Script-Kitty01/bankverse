@@ -2,7 +2,7 @@
 
 import { createDwollaClient } from "@/lib/dwolla/config";
 import { getCurrentUser } from "./user.actions";
-import { updateUserDocument } from "@/lib/appwrite/db";
+import { updateUserDocument } from "@/lib/supabase/db";
 
 /**
  * Create a Dwolla customer for a user.

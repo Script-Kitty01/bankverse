@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getAccounts } from "@/lib/actions/plaid.actions";
-import { getTransactionsByUserId } from "@/lib/appwrite/db";
+import { getTransactionsByUserId } from "@/lib/supabase/db";
 import TransactionsTable from "./TransactionsTable";
 import { Building2 } from "lucide-react";
 

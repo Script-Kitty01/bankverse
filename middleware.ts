@@ -26,7 +26,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const sessionCookie = request.cookies.get("appwrite-session");
+  const sessionCookie =
+    request.cookies.get("supabase-session") ||
+    request.cookies.get("appwrite-session");
 
   const isAuthenticated = !!sessionCookie?.value;
 

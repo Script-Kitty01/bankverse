@@ -349,87 +349,92 @@ export class PaymentOrchestrator {
   // ─── Refund Captured Payment ──────────────────────────────────
 
   async refundPayment(request: RefundRequest): Promise<RefundResult> {
-    const transaction = await getPaymentTransactionById(request.transactionId);
-    if (!transaction) {
-      return { success: false, error: "Transaction not found" };
-    }
+    // Serialize refund operations per transaction to prevent concurrent
+    // refunds from interleaving state transitions and causing double-refunds.
+    const { runWithEntityLock } = await import("@/lib/ledger/repository");
+    return runWithEntityLock(`refund:${request.transactionId}`, async () => {
+      const transaction = await getPaymentTransactionById(request.transactionId);
+      if (!transaction) {
+        return { success: false, error: "Transaction not found" };
+      }
 
-    if (transaction.paymentState !== "SUCCESS") {
-      return {
-        success: false,
-        error: `Cannot refund payment in state: ${transaction.paymentState}`,
-      };
-    }
+      if (transaction.paymentState !== "SUCCESS") {
+        return {
+          success: false,
+          error: `Cannot refund payment in state: ${transaction.paymentState}`,
+        };
+      }
 
-    // Transition settlement state
-    let currentSettlement = transaction.settlementState;
-    if (currentSettlement === "NOT_REQUIRED") {
+      // Transition settlement state in a single logical step
+      let currentSettlement = transaction.settlementState;
+      if (currentSettlement === "NOT_REQUIRED") {
+        currentSettlement = PaymentStateMachine.transitionSettlement(
+          currentSettlement,
+          "PENDING_RECONCILIATION",
+        );
+        await updatePaymentTransactionState(
+          transaction.id,
+          transaction.paymentState,
+          currentSettlement,
+        );
+      }
       currentSettlement = PaymentStateMachine.transitionSettlement(
         currentSettlement,
-        "PENDING_RECONCILIATION",
+        "REFUND_PENDING",
       );
       await updatePaymentTransactionState(
         transaction.id,
         transaction.paymentState,
         currentSettlement,
       );
-    }
-    currentSettlement = PaymentStateMachine.transitionSettlement(
-      currentSettlement,
-      "REFUND_PENDING",
-    );
-    await updatePaymentTransactionState(
-      transaction.id,
-      transaction.paymentState,
-      currentSettlement,
-    );
 
-    // Process refund via provider FIRST (money movement is source of truth)
-    const refundResult = await this.provider.refundPayment({
-      paymentId: transaction.providerPaymentId || transaction.providerReference,
-      amount: request.amount,
-      reason: request.reason,
+      // Process refund via provider FIRST (money movement is source of truth)
+      const refundResult = await this.provider.refundPayment({
+        paymentId: transaction.providerPaymentId || transaction.providerReference,
+        amount: request.amount,
+        reason: request.reason,
+      });
+
+      if (!refundResult.success) {
+        await updatePaymentTransactionState(
+          transaction.id,
+          transaction.paymentState,
+          PaymentStateMachine.transitionSettlement(
+            currentSettlement,
+            "ESCALATED",
+          ),
+        );
+        return { success: false, error: refundResult.error };
+      }
+
+      // Reverse the ledger (idempotent — safe to retry if this fails)
+      try {
+        await reverseTransaction(transaction.id, request.reason);
+      } catch (ledgerError: unknown) {
+        await updatePaymentTransactionState(
+          transaction.id,
+          transaction.paymentState,
+          PaymentStateMachine.transitionSettlement(
+            currentSettlement,
+            "ESCALATED",
+          ),
+        );
+        return {
+          success: false,
+          error: `Provider refund succeeded but ledger reversal failed: ${(ledgerError as Error).message}`,
+        };
+      }
+
+      // Transition to REFUNDED
+      await updatePaymentTransactionState(
+        transaction.id,
+        transaction.paymentState,
+        PaymentStateMachine.transitionSettlement(currentSettlement, "REFUNDED"),
+        { providerRefundId: refundResult.refundId },
+      );
+
+      return { success: true, refundId: refundResult.refundId };
     });
-
-    if (!refundResult.success) {
-      await updatePaymentTransactionState(
-        transaction.id,
-        transaction.paymentState,
-        PaymentStateMachine.transitionSettlement(
-          currentSettlement,
-          "ESCALATED",
-        ),
-      );
-      return { success: false, error: refundResult.error };
-    }
-
-    // Reverse the ledger (idempotent — safe to retry if this fails)
-    try {
-      await reverseTransaction(transaction.id, request.reason);
-    } catch (ledgerError: unknown) {
-      await updatePaymentTransactionState(
-        transaction.id,
-        transaction.paymentState,
-        PaymentStateMachine.transitionSettlement(
-          currentSettlement,
-          "ESCALATED",
-        ),
-      );
-      return {
-        success: false,
-        error: `Provider refund succeeded but ledger reversal failed: ${(ledgerError as Error).message}`,
-      };
-    }
-
-    // Transition to REFUNDED
-    await updatePaymentTransactionState(
-      transaction.id,
-      transaction.paymentState,
-      PaymentStateMachine.transitionSettlement(currentSettlement, "REFUNDED"),
-      { providerRefundId: refundResult.refundId },
-    );
-
-    return { success: true, refundId: refundResult.refundId };
   }
 
   // ─── Compensate Unresolved Payment ────────────────────────────
@@ -441,74 +446,79 @@ export class PaymentOrchestrator {
     transactionId: string,
     reason: string,
   ): Promise<RefundResult> {
-    const transaction = await getPaymentTransactionById(transactionId);
-    if (!transaction) {
-      return { success: false, error: "Transaction not found" };
-    }
+    // Serialize compensation per transaction to prevent concurrent
+    // compensations from interleaving state transitions.
+    const { runWithEntityLock } = await import("@/lib/ledger/repository");
+    return runWithEntityLock(`compensate:${transactionId}`, async () => {
+      const transaction = await getPaymentTransactionById(transactionId);
+      if (!transaction) {
+        return { success: false, error: "Transaction not found" };
+      }
 
-    // Only compensate UNKNOWN or FAILED payments
-    if (
-      transaction.paymentState !== "UNKNOWN" &&
-      transaction.paymentState !== "FAILED"
-    ) {
-      return {
-        success: false,
-        error: `Cannot compensate payment in state: ${transaction.paymentState}. Use refundPayment() for SUCCESS payments.`,
-      };
-    }
+      // Only compensate UNKNOWN or FAILED payments
+      if (
+        transaction.paymentState !== "UNKNOWN" &&
+        transaction.paymentState !== "FAILED"
+      ) {
+        return {
+          success: false,
+          error: `Cannot compensate payment in state: ${transaction.paymentState}. Use refundPayment() for SUCCESS payments.`,
+        };
+      }
 
-    // Check if money was already booked to clearing
-    const { getLedgerEntriesByTransaction } =
-      await import("@/lib/ledger/ledger.service");
-    const entries = await getLedgerEntriesByTransaction(transactionId);
+      // Check if money was already booked to clearing
+      const { getLedgerEntriesByTransaction } =
+        await import("@/lib/ledger/ledger.service");
+      const entries = await getLedgerEntriesByTransaction(transactionId);
 
-    if (entries.length === 0) {
-      // No ledger entries — money never moved, nothing to compensate
+      if (entries.length === 0) {
+        // No ledger entries — money never moved, nothing to compensate
+        await updatePaymentTransactionState(
+          transactionId,
+          transaction.paymentState,
+          PaymentStateMachine.transitionSettlement(
+            transaction.settlementState,
+            "RESOLVED",
+          ),
+        );
+        return {
+          success: true,
+          refundId: `compensate_nop_${transactionId}`,
+        };
+      }
+
+      // Money is in clearing — reverse it back to customer
+      try {
+        await reverseFromClearing(transactionId, reason);
+      } catch (ledgerError: unknown) {
+        await updatePaymentTransactionState(
+          transactionId,
+          transaction.paymentState,
+          PaymentStateMachine.transitionSettlement(
+            transaction.settlementState,
+            "ESCALATED",
+          ),
+        );
+        return {
+          success: false,
+          error: `Compensation ledger reversal failed: ${(ledgerError as Error).message}`,
+        };
+      }
+
       await updatePaymentTransactionState(
         transactionId,
         transaction.paymentState,
         PaymentStateMachine.transitionSettlement(
           transaction.settlementState,
-          "RESOLVED",
+          "COMPENSATED",
         ),
       );
+
       return {
         success: true,
-        refundId: `compensate_nop_${transactionId}`,
+        refundId: `compensate_${transactionId}`,
       };
-    }
-
-    // Money is in clearing — reverse it back to customer
-    try {
-      await reverseFromClearing(transactionId, reason);
-    } catch (ledgerError: unknown) {
-      await updatePaymentTransactionState(
-        transactionId,
-        transaction.paymentState,
-        PaymentStateMachine.transitionSettlement(
-          transaction.settlementState,
-          "ESCALATED",
-        ),
-      );
-      return {
-        success: false,
-        error: `Compensation ledger reversal failed: ${(ledgerError as Error).message}`,
-      };
-    }
-
-    await updatePaymentTransactionState(
-      transactionId,
-      transaction.paymentState,
-      PaymentStateMachine.transitionSettlement(
-        transaction.settlementState,
-        "COMPENSATED",
-      ),
-    );
-
-    return {
-      success: true,
-      refundId: `compensate_${transactionId}`,
-    };
+    });
   }
 
   // ─── Health Check ─────────────────────────────────────────────

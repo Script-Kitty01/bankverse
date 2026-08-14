@@ -1,7 +1,7 @@
 "use server";
 
 import { createPlaidClient } from "@/lib/plaid/config";
-import { createBankDocument, getBanksByUserId } from "@/lib/appwrite/db";
+import { createBankDocument, getBanksByUserId } from "@/lib/supabase/db";
 import { getCurrentUser } from "./user.actions";
 import { CountryCode, Products } from "plaid";
 import { cookies } from "next/headers";

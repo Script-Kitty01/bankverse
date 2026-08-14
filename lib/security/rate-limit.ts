@@ -10,21 +10,22 @@ interface RateLimitEntry {
 
 const store = new Map<string, RateLimitEntry>();
 
-// Clean up expired entries every 5 minutes
-const cleanupInterval = setInterval(
-  () => {
-    const now = Date.now();
-    for (const [key, entry] of store) {
-      if (now > entry.resetAt) {
-        store.delete(key);
-      }
-    }
-  },
-  5 * 60 * 1000,
-);
+/** Maximum entries before triggering lazy cleanup of expired entries. */
+const MAX_STORE_SIZE = 1000;
 
-if (cleanupInterval && typeof cleanupInterval.unref === "function") {
-  cleanupInterval.unref();
+/**
+ * Lazily remove expired entries when the store exceeds a threshold.
+ * This avoids a persistent setInterval that prevents clean shutdown
+ * in serverless/edge environments.
+ */
+function lazyCleanup(now: number): void {
+  if (store.size <= MAX_STORE_SIZE) return;
+
+  for (const [key, entry] of store) {
+    if (now > entry.resetAt) {
+      store.delete(key);
+    }
+  }
 }
 
 /**
@@ -40,6 +41,7 @@ export function checkRateLimit(
   windowMs: number,
 ): { allowed: boolean; remaining: number; resetAt: number } {
   const now = Date.now();
+  lazyCleanup(now);
   const entry = store.get(key);
 
   if (!entry || now > entry.resetAt) {

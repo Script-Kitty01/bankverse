@@ -3,7 +3,7 @@ import TransactionsTable from "@/components/TransactionsTable";
 import TransactionPagination from "@/components/TransactionPagination";
 import { getCurrentUser } from "@/lib/actions/user.actions";
 import { getAccounts } from "@/lib/actions/plaid.actions";
-import { getTransactionsByUserId } from "@/lib/appwrite/db";
+import { getTransactionsByUserId } from "@/lib/supabase/db";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";

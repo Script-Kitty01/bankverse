@@ -1,7 +1,7 @@
 "use server";
 
 import Razorpay from "razorpay";
-import { createPaymentRecord } from "@/lib/appwrite/db";
+import { createPaymentRecord } from "@/lib/supabase/db";
 import { getCurrentUser } from "./user.actions";
 import { recordTransaction } from "@/lib/ledger/ledger.service";
 import crypto from "crypto";

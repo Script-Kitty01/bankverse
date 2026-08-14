@@ -111,8 +111,13 @@ export async function recordTransaction(
   const existing = await getPaymentTransactionByIdempotencyKey(idempotencyKey);
   if (existing) {
     const entries = await getLedgerEntriesByTransaction(existing.id);
-    const debitEntry = entries.find((e) => e.entryType === "DEBIT")!;
-    const creditEntry = entries.find((e) => e.entryType === "CREDIT")!;
+    const debitEntry = entries.find((e) => e.entryType === "DEBIT");
+    const creditEntry = entries.find((e) => e.entryType === "CREDIT");
+    if (!debitEntry || !creditEntry) {
+      throw new Error(
+        `Incomplete ledger entries for transaction ${existing.id}`,
+      );
+    }
     return { transaction: existing, debitEntry, creditEntry };
   }
 
@@ -144,12 +149,19 @@ export async function recordTransaction(
   // 4b. Post-create idempotency check: if another concurrent call beat us
   //     to creating a transaction with the same idempotencyKey, return theirs.
   //     This handles the race where two callers both pass the pre-check.
+  //     MUST happen BEFORE ledger entry creation to avoid orphaned entries.
   const postCheck = await getPaymentTransactionByIdempotencyKey(idempotencyKey);
   if (postCheck && postCheck.id !== transaction.id) {
-    // Another caller won the race — return their transaction
+    // Another caller won the race — return their transaction and entries.
+    // No ledger entries were created for our transaction, so no cleanup needed.
     const entries = await getLedgerEntriesByTransaction(postCheck.id);
-    const debitEntry = entries.find((e) => e.entryType === "DEBIT")!;
-    const creditEntry = entries.find((e) => e.entryType === "CREDIT")!;
+    const debitEntry = entries.find((e) => e.entryType === "DEBIT");
+    const creditEntry = entries.find((e) => e.entryType === "CREDIT");
+    if (!debitEntry || !creditEntry) {
+      throw new Error(
+        `Incomplete ledger entries for transaction ${postCheck.id}`,
+      );
+    }
     return { transaction: postCheck, debitEntry, creditEntry };
   }
 
@@ -222,20 +234,10 @@ export async function settleToMerchant(
     });
   }
 
-  // Idempotency check: if settlement entries already exist
-  const allEntries = await getLedgerEntriesByTransaction(transactionId);
-  const existingSettlement = allEntries.filter((e) =>
-    e.description.startsWith("SETTLEMENT:"),
-  );
-  if (existingSettlement.length >= 2) {
-    const settlementDebit = existingSettlement.find((e) => e.entryType === "DEBIT")!;
-    const settlementCredit = existingSettlement.find((e) => e.entryType === "CREDIT")!;
-    if (settlementDebit && settlementCredit) {
-      return { debitEntry: settlementDebit, creditEntry: settlementCredit };
-    }
-  }
-
   // Step 1: Atomically update state & increment version via OCC.
+  // This MUST happen BEFORE the idempotency check so the OCC version acts
+  // as the serialization gate. If two callers race, the second one's
+  // updatePaymentTransactionState will throw an OCC conflict.
   const targetVersion = expectedVersion ?? transaction.version;
   const updatedTx = await updatePaymentTransactionState(
     transactionId,
@@ -251,7 +253,22 @@ export async function settleToMerchant(
     );
   }
 
-  // Step 2: Atomic financial entry creation (Clearing → Merchant)
+  // Step 2: Idempotency check — if settlement entries already exist
+  // (from a previous successful run of this caller after OCC gate passed),
+  // return them instead of creating duplicates.
+  const allEntries = await getLedgerEntriesByTransaction(transactionId);
+  const existingSettlement = allEntries.filter((e) =>
+    e.description.startsWith("SETTLEMENT:"),
+  );
+  if (existingSettlement.length >= 2) {
+    const settlementDebit = existingSettlement.find((e) => e.entryType === "DEBIT");
+    const settlementCredit = existingSettlement.find((e) => e.entryType === "CREDIT");
+    if (settlementDebit && settlementCredit) {
+      return { debitEntry: settlementDebit, creditEntry: settlementCredit };
+    }
+  }
+
+  // Step 3: Atomic financial entry creation (Clearing → Merchant)
   const createdEntries: LedgerEntry[] = [];
   try {
     const settlementDebit = await createLedgerEntry({
