@@ -7,7 +7,7 @@
 
 import { NextResponse } from "next/server";
 import { ChaosInjector } from "@/lib/chaos/injector";
-import { CHAOS_SCENARIOS } from "@/lib/chaos/scenarios";
+import { CHAOS_SCENARIOS, addCustomScenario } from "@/lib/chaos/scenarios";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -47,6 +47,38 @@ export async function POST(request: Request) {
       case "run-all":
         const report = await ChaosInjector.runFullSuite();
         return NextResponse.json({ success: true, report });
+
+      case "create-custom": {
+        const {
+          name,
+          description,
+          severity,
+          injectDescription,
+          expectedBehavior,
+          invariant,
+          failureType,
+          latencyMs,
+          failureRate,
+        } = body;
+
+        const id = `custom-${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+        const customDef = {
+          id,
+          name: name || "Custom Chaos Scenario",
+          description: description || "User-configured custom failure injection scenario",
+          severity: severity || "HIGH",
+          injectDescription: injectDescription || `Simulates ${failureType || "custom"} failure mode`,
+          expectedBehavior: expectedBehavior || "System maintains financial invariants and logs anomaly",
+          invariant: invariant || "SUM(debits) === SUM(credits) remains true",
+          failureType,
+          latencyMs: Number(latencyMs) || 300,
+          failureRate: Number(failureRate) || 0,
+        };
+
+        addCustomScenario(customDef);
+        const result = await ChaosInjector.runScenario(id);
+        return NextResponse.json({ success: true, scenario: customDef, result });
+      }
 
       case "run":
       default:

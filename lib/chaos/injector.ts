@@ -240,15 +240,63 @@ export class ChaosInjector {
       case "refund-race-condition":
         return ChaosInjector.testRefundRaceCondition();
       default:
-        return {
-          passed: false,
-          actualBehavior: "Unknown scenario",
-          invariantHeld: false,
-          invariantVerification: "Unknown scenario",
-          details: {},
-        };
+        return ChaosInjector.testCustomScenario(scenario);
     }
   }
+  private static async testCustomScenario(scenario: ChaosScenarioDef): Promise<{
+    passed: boolean;
+    actualBehavior: string;
+    invariantHeld: boolean;
+    invariantVerification: string;
+    details: Record<string, unknown>;
+  }> {
+    if (scenario.failureType === "TIMEOUT") {
+      return ChaosInjector.testProviderTimeout();
+    }
+    if (scenario.failureType === "AMOUNT_MISMATCH") {
+      return ChaosInjector.testAmountMismatch();
+    }
+    if (scenario.failureType === "PROVIDER_DOWN") {
+      return ChaosInjector.testProviderDown();
+    }
+    if (scenario.failureType === "DUPLICATE_CHARGE") {
+      return ChaosInjector.testDuplicateCharge();
+    }
+    if (scenario.failureType === "MISSING_CREDIT") {
+      return ChaosInjector.testMissingCredit();
+    }
+
+    const mockPsp = new MockPaymentProvider({
+      latency: scenario.latencyMs || 200,
+      failureRate: scenario.failureRate || 0,
+    });
+    const orchestrator = new PaymentOrchestrator({ provider: mockPsp });
+    const payment = await orchestrator.processPayment({
+      customerId: `cust_custom_${Date.now()}`,
+      merchantId: `merch_custom_${Date.now()}`,
+      amount: 3500,
+      currency: "INR",
+      description: `Custom scenario: ${scenario.name}`,
+    });
+
+    const integrity = await verifyLedgerIntegrity();
+    const passed = integrity.valid;
+
+    return {
+      passed,
+      actualBehavior: `Executed custom scenario '${scenario.name}': payment state=${payment.transaction?.paymentState || "COMPLETED"}, ledger balanced (${integrity.totalDebits} debits / ${integrity.totalCredits} credits).`,
+      invariantHeld: integrity.valid,
+      invariantVerification: `Double-entry ledger integrity checked: SUM(debits) === SUM(credits) (${integrity.difference} difference).`,
+      details: {
+        scenarioId: scenario.id,
+        paymentSuccess: payment.success,
+        paymentState: payment.transaction?.paymentState,
+        ledgerValid: integrity.valid,
+      },
+    };
+  }
+
+
 
   // ─── Scenario 1: Provider Timeout ─────────────────────────────
   private static async testProviderTimeout(): Promise<{

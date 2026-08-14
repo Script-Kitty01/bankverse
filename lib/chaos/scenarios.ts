@@ -19,6 +19,9 @@ export interface ChaosScenarioDef {
    * e.g. "SUM(debits) === SUM(credits) remains true"
    */
   invariant: string;
+  failureType?: "TIMEOUT" | "AMOUNT_MISMATCH" | "PROVIDER_DOWN" | "DUPLICATE_CHARGE" | "MISSING_CREDIT";
+  latencyMs?: number;
+  failureRate?: number;
 }
 
 export const CHAOS_SCENARIOS: ChaosScenarioDef[] = [
@@ -140,3 +143,12 @@ export const CHAOS_SCENARIOS: ChaosScenarioDef[] = [
       "The refund is never lost: it either completes after the payment settles, or the payment fails and no refund is needed. The customer's balance is always correct.",
   },
 ];
+export function addCustomScenario(def: ChaosScenarioDef): void {
+  const existingIndex = CHAOS_SCENARIOS.findIndex((s) => s.id === def.id);
+  if (existingIndex >= 0) {
+    CHAOS_SCENARIOS[existingIndex] = def;
+  } else {
+    CHAOS_SCENARIOS.push(def);
+  }
+}
+

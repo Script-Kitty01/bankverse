@@ -59,6 +59,13 @@ export default function ChaosLab() {
   const [loading, setLoading] = useState(false);
   const [runningScenario, setRunningScenario] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showCustomForm, setShowCustomForm] = useState(false);
+  const [customName, setCustomName] = useState("");
+  const [customSeverity, setCustomSeverity] = useState("HIGH");
+  const [customFailureType, setCustomFailureType] = useState("TIMEOUT");
+  const [customLatency, setCustomLatency] = useState("500");
+  const [customFailureRate, setCustomFailureRate] = useState("0.5");
+  const [customSubmitting, setCustomSubmitting] = useState(false);
 
   // Load scenarios
   const loadScenarios = useCallback(async () => {
@@ -126,6 +133,56 @@ export default function ChaosLab() {
       setLoading(false);
     }
   }, []);
+  const handleCustomInject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customName.trim()) return;
+    setCustomSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/chaos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create-custom",
+          name: customName,
+          severity: customSeverity,
+          failureType: customFailureType,
+          latencyMs: Number(customLatency) || 300,
+          failureRate: Number(customFailureRate) || 0,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.result) {
+        setReport((prev) => {
+          const results = prev ? [...prev.results] : [];
+          const idx = results.findIndex((r) => r.scenarioId === data.scenario.id);
+          if (idx >= 0) results[idx] = data.result;
+          else results.push(data.result);
+          const passed = results.filter((r) => r.passed).length;
+          return {
+            runAt: new Date().toISOString(),
+            scenariosRun: results.length,
+            passed,
+            failed: results.length - passed,
+            passRate: results.length > 0 ? passed / results.length : 0,
+            invariantsHeld: results.filter((r) => r.invariantHeld).length,
+            invariantRate: results.length > 0 ? results.filter((r) => r.invariantHeld).length / results.length : 0,
+            results,
+          };
+        });
+        await loadScenarios();
+        setShowCustomForm(false);
+        setCustomName("");
+      } else if (data.error) {
+        setError(data.error);
+      }
+    } catch (e: unknown) {
+      setError((e as Error).message);
+    } finally {
+      setCustomSubmitting(false);
+    }
+  };
+
 
   // Load scenarios on mount
   useEffect(() => {
@@ -143,6 +200,12 @@ export default function ChaosLab() {
           </p>
         </div>
         <div className="flex gap-3">
+          <Button
+            variant="outline"
+            onClick={() => setShowCustomForm(!showCustomForm)}
+          >
+            {showCustomForm ? "Cancel Custom" : "+ Inject Custom Scenario"}
+          </Button>
           <Button variant="outline" onClick={loadScenarios} disabled={loading}>
             Refresh
           </Button>
@@ -162,6 +225,95 @@ export default function ChaosLab() {
           {error}
         </div>
       )}
+      {/* Custom Scenario Form */}
+      {showCustomForm && (
+        <form
+          onSubmit={handleCustomInject}
+          className="p-5 bg-white border border-indigo-200 rounded-xl shadow-sm space-y-4"
+        >
+          <h3 className="font-bold text-gray-900 text-base">
+            Inject Custom Chaos Failure Scenario
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Scenario Name
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Gateway Timeout & 50% Drop"
+                value={customName}
+                onChange={(e) => setCustomName(e.target.value)}
+                className="w-full text-xs p-2 border border-gray-300 rounded-lg"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Failure Mode
+              </label>
+              <select
+                value={customFailureType}
+                onChange={(e) => setCustomFailureType(e.target.value)}
+                className="w-full text-xs p-2 border border-gray-300 rounded-lg bg-white"
+              >
+                <option value="TIMEOUT">PSP Gateway Timeout (504)</option>
+                <option value="AMOUNT_MISMATCH">10x Amount Mismatch</option>
+                <option value="PROVIDER_DOWN">Provider Unreachable (500)</option>
+                <option value="DUPLICATE_CHARGE">Duplicate PSP Charge</option>
+                <option value="MISSING_CREDIT">Debit Without Credit Imbalance</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Severity Level
+              </label>
+              <select
+                value={customSeverity}
+                onChange={(e) => setCustomSeverity(e.target.value)}
+                className="w-full text-xs p-2 border border-gray-300 rounded-lg bg-white"
+              >
+                <option value="LOW">LOW</option>
+                <option value="MEDIUM">MEDIUM</option>
+                <option value="HIGH">HIGH</option>
+                <option value="CRITICAL">CRITICAL</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Simulated Latency (ms)
+              </label>
+              <input
+                type="number"
+                value={customLatency}
+                onChange={(e) => setCustomLatency(e.target.value)}
+                className="w-full text-xs p-2 border border-gray-300 rounded-lg"
+                min="0"
+                max="10000"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowCustomForm(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              size="sm"
+              disabled={customSubmitting}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white"
+            >
+              {customSubmitting ? "Injecting..." : "Inject & Run Scenario"}
+            </Button>
+          </div>
+        </form>
+      )}
+
 
       {/* Report Summary */}
       {report && (
