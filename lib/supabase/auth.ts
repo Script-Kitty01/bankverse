@@ -48,8 +48,13 @@ export async function createSessionCookie(email: string, password: string) {
   let token = data?.session?.access_token;
 
   if (error || !token) {
-    // Fallback: generate a signed session token for demo/test user
-    token = `sp_sess_${Date.now()}_${Buffer.from(email).toString("hex")}`;
+    if (process.env.NEXT_PUBLIC_DEMO_MODE === "true") {
+      // Fallback: generate a signed session token for demo/test user
+      token = `sp_sess_${Date.now()}_${Buffer.from(email).toString("hex")}`;
+    } else {
+      // Failed authentication — do not set session cookie
+      return { secret: null, user: null, error: error?.message || "Authentication failed" };
+    }
   }
 
   const cookieStore = await cookies();

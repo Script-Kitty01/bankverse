@@ -62,11 +62,12 @@ const statusColors: Record<string, string> = {
 };
 
 function formatINR(amount: number): string {
+  const validAmount = typeof amount === "number" && !isNaN(amount) ? amount : 0;
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
     minimumFractionDigits: 0,
-  }).format(amount / 100);
+  }).format(validAmount / 100);
 }
 
 function timeAgo(dateStr: string): string {

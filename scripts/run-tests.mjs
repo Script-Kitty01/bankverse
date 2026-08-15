@@ -22,21 +22,11 @@ const ENDPOINTS = [
 ];
 
 async function fetchJson(url) {
-  return new Promise((resolve, reject) => {
-    http
-      .get(url, (res) => {
-        let data = "";
-        res.on("data", (chunk) => (data += chunk));
-        res.on("end", () => {
-          try {
-            resolve(JSON.parse(data));
-          } catch {
-            reject(new Error(`Failed to parse JSON response: ${data.slice(0, 100)}`));
-          }
-        });
-      })
-      .on("error", reject);
-  });
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status} ${res.statusText}`);
+  }
+  return await res.json();
 }
 
 async function runInProcess(filePath) {

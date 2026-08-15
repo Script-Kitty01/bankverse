@@ -90,7 +90,11 @@ export class PaymentOrchestrator {
   }
 
   private resolveProvider(): PaymentProvider {
-    if (process.env.NEXT_PUBLIC_DEMO_MODE === "true") {
+    if (
+      process.env.NEXT_PUBLIC_DEMO_MODE === "true" ||
+      !process.env.RAZORPAY_KEY_ID ||
+      process.env.RAZORPAY_KEY_ID === "rzp_test_demo123"
+    ) {
       return new MockPaymentProvider();
     }
     return new RazorpayPaymentProvider();

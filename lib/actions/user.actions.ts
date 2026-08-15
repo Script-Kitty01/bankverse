@@ -87,16 +87,23 @@ export const signIn = async ({
   password: string;
 }) => {
   try {
-    await createSessionCookie(email, password);
+    const sessionRes = await createSessionCookie(email, password);
+
+    if (sessionRes && "error" in sessionRes && sessionRes.error) {
+      await deleteSessionCookie();
+      return { success: false, error: "Invalid email or password." };
+    }
 
     const account = await getLoggedInAccount();
     if (!account) {
+      await deleteSessionCookie();
       return { success: false, error: "Invalid email or password." };
     }
 
     return { success: true };
   } catch (error) {
     console.error("signIn error:", error);
+    await deleteSessionCookie();
     return { success: false, error: "Invalid email or password." };
   }
 };

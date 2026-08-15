@@ -165,8 +165,12 @@ export class ReconciliationEngine {
     start: string;
     end: string;
   }): Promise<ExternalRecord[]> {
-    // In demo mode, generate mock external records from internal transactions
-    if (process.env.NEXT_PUBLIC_DEMO_MODE === "true") {
+    // In demo mode or unconfigured provider environments, generate simulated external records from internal transactions
+    if (
+      process.env.NEXT_PUBLIC_DEMO_MODE === "true" ||
+      !process.env.RAZORPAY_KEY_ID ||
+      process.env.RAZORPAY_KEY_ID === "rzp_test_demo123"
+    ) {
       const internalTxs = await this.fetchInternalTransactions(dateRange);
 
       return internalTxs.map((tx) => ({
