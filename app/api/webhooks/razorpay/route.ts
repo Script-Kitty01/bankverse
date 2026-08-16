@@ -16,6 +16,7 @@ import { updatePaymentTransactionState } from "@/lib/ledger/ledger.service";
 import { PaymentStateMachine } from "@/lib/payment/state-machine";
 import type { PaymentState } from "@/lib/ledger/types";
 import { logAuditEvent } from "@/lib/security/audit";
+import { tryParseJson } from "@/lib/security/request";
 
 // ─── Webhook Payload Types ──────────────────────────────────────
 
@@ -60,6 +61,49 @@ interface WebhookEventRecord {
 
 // In-memory store for demo mode; use Appwrite in production
 const webhookEventStore = new Map<string, WebhookEventRecord>();
+
+// ─── Bounded Store (SRE hardening) ───────────────────────────────
+const MAX_WEBHOOK_EVENTS = 5000;
+const PROCESSED_EVENT_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+/**
+ * Prevent unbounded memory growth. Lazily evicts stale PROCESSED/DUPLICATE
+ * records older than the TTL, then drops the oldest records if still over cap.
+ * PENDING/PROCESSING records (required for idempotency/dedup) are never dropped
+ * while they remain live.
+ */
+function sweepWebhookEventStore(): void {
+  if (webhookEventStore.size === 0) return;
+
+  const now = Date.now();
+  const stale: string[] = [];
+
+  for (const [key, record] of webhookEventStore) {
+    const isClosed = record.status === "PROCESSED" || record.status === "DUPLICATE";
+    const ageMs = now - new Date(record.receivedAt).getTime();
+    if (isClosed && (ageMs > PROCESSED_EVENT_TTL_MS || ageMs < 0)) {
+      stale.push(key);
+    }
+  }
+  for (const key of stale) webhookEventStore.delete(key);
+
+  if (webhookEventStore.size > MAX_WEBHOOK_EVENTS) {
+    // Drop oldest closed records until back within budget.
+    const closed = [...webhookEventStore.entries()]
+      .filter(([, r]) => r.status === "PROCESSED" || r.status === "DUPLICATE")
+      .sort(
+        (a, b) =>
+          new Date(a[1].receivedAt).getTime() -
+          new Date(b[1].receivedAt).getTime(),
+      );
+    let toRemove = webhookEventStore.size - MAX_WEBHOOK_EVENTS;
+    for (const [key] of closed) {
+      if (toRemove <= 0) break;
+      webhookEventStore.delete(key);
+      toRemove--;
+    }
+  }
+}
 
 function hashPayload(payload: unknown): string {
   return crypto
@@ -125,8 +169,26 @@ export async function POST(request: Request) {
       }
     }
 
-    const body = JSON.parse(rawBody) as RazorpayWebhookPayload;
+    const bodyResult = tryParseJson<{ event?: string; payload?: RazorpayWebhookPayload["payload"] }>(rawBody);
+    if (!bodyResult.ok) {
+      return NextResponse.json(
+        { error: `Invalid JSON payload: ${bodyResult.error}` },
+        { status: 400 },
+      );
+    }
+
+    const body = bodyResult.data as RazorpayWebhookPayload;
     const { event, payload: webhookPayload } = body || {};
+
+    if (!event || typeof event !== "string") {
+      return NextResponse.json(
+        { error: "Missing required 'event' field in webhook payload" },
+        { status: 400 },
+      );
+    }
+
+    // Bounded-store sweep before dedup/insertion.
+    sweepWebhookEventStore();
 
     // ── Idempotency Check ───────────────────────────────────────
     const eventId =

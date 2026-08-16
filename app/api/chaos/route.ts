@@ -7,7 +7,12 @@
 
 import { NextResponse } from "next/server";
 import { ChaosInjector } from "@/lib/chaos/injector";
-import { CHAOS_SCENARIOS, addCustomScenario } from "@/lib/chaos/scenarios";
+import { CHAOS_SCENARIOS, type ChaosScenarioDef, addCustomScenario } from "@/lib/chaos/scenarios";
+import { readJsonBody } from "@/lib/security/request";
+import {
+  isOpsRequestAuthorized,
+  unauthorizedResponse,
+} from "@/lib/security/ops-auth";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -39,9 +44,34 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  // SRE: reject anonymous fault injection unless demo mode is enabled.
+  if (!isOpsRequestAuthorized(request)) {
+    return unauthorizedResponse();
+  }
+
   try {
-    const body = await request.json();
-    const { scenarioId, action } = body;
+    const parsedBody = await readJsonBody<{
+      action?: string;
+      scenarioId?: string;
+      // create-custom fields
+      name?: string;
+      description?: string;
+      severity?: string;
+      injectDescription?: string;
+      expectedBehavior?: string;
+      invariant?: string;
+      failureType?: string;
+      latencyMs?: number | string;
+      failureRate?: number | string;
+    }>(request);
+    if (!parsedBody.ok) {
+      return NextResponse.json(
+        { success: false, error: parsedBody.error },
+        { status: 400 },
+      );
+    }
+
+    const { scenarioId, action } = parsedBody.data;
 
     switch (action) {
       case "run-all":
@@ -59,21 +89,27 @@ export async function POST(request: Request) {
           failureType,
           latencyMs,
           failureRate,
-        } = body;
+        } = parsedBody.data;
+
+        // Validate severity against the known enum; reject unknown values.
+        const VALID_SEVERITIES = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
+        const sanitizedSeverity = VALID_SEVERITIES.includes(severity || "")
+          ? (severity as "LOW" | "MEDIUM" | "HIGH" | "CRITICAL")
+          : "HIGH";
 
         const id = `custom-${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
         const customDef = {
           id,
           name: name || "Custom Chaos Scenario",
           description: description || "User-configured custom failure injection scenario",
-          severity: severity || "HIGH",
+          severity: sanitizedSeverity,
           injectDescription: injectDescription || `Simulates ${failureType || "custom"} failure mode`,
           expectedBehavior: expectedBehavior || "System maintains financial invariants and logs anomaly",
           invariant: invariant || "SUM(debits) === SUM(credits) remains true",
-          failureType,
+          failureType: failureType as ChaosScenarioDef["failureType"],
           latencyMs: Number(latencyMs) || 300,
           failureRate: Number(failureRate) || 0,
-        };
+        } satisfies ChaosScenarioDef;
 
         addCustomScenario(customDef);
         const result = await ChaosInjector.runScenario(id);

@@ -66,7 +66,8 @@ function formatINR(amount: number): string {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
-    minimumFractionDigits: 0,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(validAmount / 100);
 }
 
@@ -87,6 +88,7 @@ export default function OperationsDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const [showAllIncidents, setShowAllIncidents] = useState(false);
 
   const fetchSnapshot = useCallback(async () => {
     setLoading(true);
@@ -304,70 +306,106 @@ export default function OperationsDashboard() {
 
           {/* Incidents */}
           <div className="p-4 bg-white border rounded-xl shadow-sm">
-            <h3 className="font-semibold text-gray-900 mb-3">
-              Incidents ({snapshot.recentIncidents.length})
-            </h3>
-            {snapshot.recentIncidents.length === 0 ? (
-              <div className="text-center py-8 text-gray-400">
-                <p className="text-lg">🎉 No active incidents</p>
-                <p className="text-sm mt-1">All systems operational</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {snapshot.recentIncidents.map((incident) => (
-                  <div
-                    key={incident.id}
-                    className="p-3 bg-gray-50 rounded-lg border border-gray-100"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h4 className="font-medium text-gray-900 text-sm">
-                            {incident.title}
-                          </h4>
-                          <span
-                            className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                              severityColors[incident.severity] || ""
-                            }`}
-                          >
-                            {incident.severity}
-                          </span>
-                          <span
-                            className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                              statusColors[incident.status] || ""
-                            }`}
-                          >
-                            {incident.status}
-                          </span>
-                        </div>
-                        <div className="flex gap-4 mt-1 text-xs text-gray-500">
-                          <span>
-                            Provider:{" "}
-                            <span className="font-medium capitalize">
-                              {incident.provider}
-                            </span>
-                          </span>
-                          <span>
-                            Affected: {incident.affectedTransactionCount} txs
-                          </span>
-                          <span>{formatINR(incident.totalAffectedAmount)}</span>
-                          <span>Detected {timeAgo(incident.detectedAt)}</span>
-                        </div>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => resolveIncident(incident.id)}
-                        disabled={resolvingId === incident.id}
-                        className="shrink-0 text-xs"
-                      >
-                        {resolvingId === incident.id ? "..." : "Resolve"}
-                      </Button>
-                    </div>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-gray-900">
+                Incidents ({" "}
+                {snapshot.recentIncidents.filter(
+                  (i) => i.status !== "RESOLVED" && i.status !== "DISMISSED",
+                ).length || 0}{" "}
+                active
+                {snapshot.recentIncidents.some(
+                  (i) => i.status === "RESOLVED" || i.status === "DISMISSED",
+                )
+                  ? ` / ${snapshot.recentIncidents.length} total`
+                  : ""}
+                {" "})
+              </h3>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowAllIncidents((v) => !v)}
+                className="shrink-0 text-xs"
+              >
+                {showAllIncidents ? "Show active only" : "Show resolved too"}
+              </Button>
+            </div>
+            {(() => {
+              const visibleIncidents = showAllIncidents
+                ? snapshot.recentIncidents
+                : snapshot.recentIncidents.filter(
+                    (i) =>
+                      i.status !== "RESOLVED" && i.status !== "DISMISSED",
+                  );
+
+              if (visibleIncidents.length === 0) {
+                return (
+                  <div className="text-center py-8 text-gray-400">
+                    <p className="text-lg">🎉 No active incidents</p>
+                    <p className="text-sm mt-1">All systems operational</p>
                   </div>
-                ))}
-              </div>
-            )}
+                );
+              }
+
+              return (
+                <div className="space-y-3">
+                  {visibleIncidents.map((incident) => (
+                    <div
+                      key={incident.id}
+                      className="p-3 bg-gray-50 rounded-lg border border-gray-100"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="font-medium text-gray-900 text-sm">
+                              {incident.title}
+                            </h4>
+                            <span
+                              className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                severityColors[incident.severity] || ""
+                              }`}
+                            >
+                              {incident.severity}
+                            </span>
+                            <span
+                              className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                statusColors[incident.status] || ""
+                              }`}
+                            >
+                              {incident.status}
+                            </span>
+                          </div>
+                          <div className="flex gap-4 mt-1 text-xs text-gray-500">
+                            <span>
+                              Provider:{" "}
+                              <span className="font-medium capitalize">
+                                {incident.provider}
+                              </span>
+                            </span>
+                            <span>
+                              Affected: {incident.affectedTransactionCount} txs
+                            </span>
+                            <span>{formatINR(incident.totalAffectedAmount)}</span>
+                            <span>Detected {timeAgo(incident.detectedAt)}</span>
+                          </div>
+                        </div>
+                        {incident.status !== "RESOLVED" &&
+                          incident.status !== "DISMISSED" && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => resolveIncident(incident.id)}
+                              disabled={resolvingId === incident.id}
+                              className="shrink-0 text-xs"
+                            >
+                              {resolvingId === incident.id ? "..." : "Resolve"}
+                            </Button>
+                          )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
         </>
       )}

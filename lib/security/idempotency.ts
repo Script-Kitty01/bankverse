@@ -33,6 +33,40 @@ export function computeRequestHash(params: Record<string, unknown>): string {
 
 const redisMockStore = new Map<string, { value: string; expiresAt: number }>();
 
+// ─── Bounded Store (SRE hardening) ───────────────────────────────
+const MAX_IDEMPOTENCY_ENTRIES = 10000;
+
+/**
+ * Lazily evict expired entries from the mock Redis store to prevent
+ * unbounded memory growth. Called on every read/write path.
+ */
+function sweepExpiredEntries(): void {
+  if (redisMockStore.size === 0) return;
+  const now = Date.now();
+  const expired: string[] = [];
+  for (const [key, entry] of redisMockStore) {
+    if (entry.expiresAt <= now) expired.push(key);
+  }
+  for (const key of expired) redisMockStore.delete(key);
+}
+
+/**
+ * Enforce the maximum store size. After marking expired entries, if the store
+ * is still over budget, evict the entries closest to expiry (FIFO-ish).
+ */
+function enforceStoreCap(): void {
+  sweepExpiredEntries();
+  if (redisMockStore.size <= MAX_IDEMPOTENCY_ENTRIES) return;
+
+  const sorted = [...redisMockStore.entries()].sort(
+    (a, b) => a[1].expiresAt - b[1].expiresAt,
+  );
+  const toRemove = redisMockStore.size - MAX_IDEMPOTENCY_ENTRIES;
+  for (let i = 0; i < toRemove; i++) {
+    redisMockStore.delete(sorted[i][0]);
+  }
+}
+
 export class IdempotencyManager {
   /**
    * Acquire a short-lived lock in Redis (`SET key token NX EX ttl`).
@@ -43,6 +77,7 @@ export class IdempotencyManager {
     lockToken = "LOCKED",
   ): Promise<boolean> {
     const lockKey = `lock:${idempotencyKey}`;
+    enforceStoreCap();
     const now = Date.now();
 
     const existing = redisMockStore.get(lockKey);
@@ -83,6 +118,7 @@ export class IdempotencyManager {
     requestParams?: Record<string, unknown>,
     ttlSeconds = 86400, // 24 hours
   ): Promise<void> {
+    enforceStoreCap();
     const cacheKey = `result:${idempotencyKey}`;
     const requestHash = requestParams ? computeRequestHash(requestParams) : undefined;
     const dataToCache: CachedIdempotencyResult = {
@@ -104,6 +140,7 @@ export class IdempotencyManager {
     idempotencyKey: string,
     requestParams?: Record<string, unknown>,
   ): Promise<CachedIdempotencyResult | null> {
+    enforceStoreCap();
     const cacheKey = `result:${idempotencyKey}`;
     const now = Date.now();
     const expectedHash = requestParams ? computeRequestHash(requestParams) : undefined;

@@ -10,6 +10,11 @@ import { IncidentDetector } from "@/lib/incidents/detector";
 import { getAllPaymentTransactions } from "@/lib/ledger/ledger.service";
 import { getReconciliationEngine } from "@/lib/reconciliation/engine";
 import { MockPaymentProvider } from "@/lib/payment/mock.provider";
+import { readJsonBody } from "@/lib/security/request";
+import {
+  isOpsRequestAuthorized,
+  unauthorizedResponse,
+} from "@/lib/security/ops-auth";
 
 export async function GET() {
   try {
@@ -58,9 +63,25 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  // SRE: reject anonymous mutation unless demo mode is enabled.
+  if (!isOpsRequestAuthorized(request)) {
+    return unauthorizedResponse();
+  }
+
   try {
-    const body = await request.json();
-    const { action, incidentId, resolution } = body;
+    const parsedBody = await readJsonBody<{
+      action?: string;
+      incidentId?: string;
+      resolution?: string;
+    }>(request);
+    if (!parsedBody.ok) {
+      return NextResponse.json(
+        { success: false, error: parsedBody.error },
+        { status: 400 },
+      );
+    }
+
+    const { action, incidentId, resolution } = parsedBody.data;
 
     switch (action) {
       case "resolve-incident": {
