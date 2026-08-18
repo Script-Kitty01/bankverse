@@ -2,7 +2,7 @@
  * BankVerse — Credit Line Engine
  *
  * Core business logic for UPI-linked credit lines. This is the engine
- * that powers Slice's primary product: instant UPI credit with EMI conversion.
+ * that powers FINTECH UPI credit products: instant credit with EMI conversion.
  *
  * Key capabilities:
  * - Credit line origination with limit assignment

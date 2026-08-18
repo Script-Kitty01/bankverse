@@ -1,6 +1,6 @@
 # 🧪 BankVerse — Chaos Engineering & Operations Walkthrough
 
-> **Live demo guide for Slice's engineering team.** Every scenario below is runnable, verifiable, and proves a specific financial correctness invariant.
+> **Live demo guide for FINTECH engineering teams.** Every scenario below is runnable, verifiable, and proves a specific financial correctness invariant.
 
 ---
 

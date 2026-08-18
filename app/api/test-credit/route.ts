@@ -5,7 +5,7 @@
  * origination, draw, interest accrual, EMI conversion, repayment allocation,
  * delinquency tracking, late fees, and freeze/default lifecycle.
  *
- * This directly models Slice's core product: UPI-linked credit with EMI.
+ * This directly models a FINTECH core product: UPI-linked credit with EMI.
  */
 
 import { NextResponse } from "next/server";

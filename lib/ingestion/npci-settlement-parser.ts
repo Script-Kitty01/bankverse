@@ -6,7 +6,7 @@
  *
  * NPCI settlement files are CSV exports delivered by sponsor banks (e.g., HDFC, ICICI)
  * containing all UPI transactions settled in a given batch window. These are the
- * ground-truth records that Slice (and any UPI-based fintech) must reconcile against.
+ * ground-truth records that any UPI-based FINTECH must reconcile against.
  *
  * Key NPCI columns:
  *   txn_id           — NPCI transaction ID (primary reference)

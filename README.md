@@ -26,11 +26,11 @@
 
 When a payment provider says "success", your system says "failure", and money is somewhere in between — **who fixes it?** Most banking apps treat payment exceptions as unhandled runtime errors. BankVerse treats them as **baseline execution conditions**.
 
-### Built for Slice's UPI Credit Card Infrastructure
+### Built for FINTECH UPI Credit Card Infrastructure
 
-This project models the exact payment reliability challenges faced by **Slice** (India's leading UPI-linked credit card):
+This project models the exact payment reliability challenges faced by any **FINTECH** operating UPI-linked credit cards:
 
-| Slice Challenge | BankVerse Solution |
+| FINTECH Challenge | BankVerse Solution |
 |---|---|
 | Thousands of daily UPI repayments via NPCI settlement files | **NPCI Settlement Parser** — auto-parses 13-column CSV, reconciles against internal ledger |
 | Credit line lifecycle (origination → draw → EMI → delinquency) | **UPI Credit Line Engine** — compound interest, EMI amortization, repayment waterfall, DPD tracking |

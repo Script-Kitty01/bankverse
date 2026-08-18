@@ -1,14 +1,14 @@
-# BankVerse → Slice: Engineering Pitch
+# BankVerse — FINTECH Engineering Pitch
 
-> **Cold outreach to Slice's engineering team — mapping BankVerse's architecture to Slice's real-world payment infrastructure challenges.**
+> **Pitch for FINTECH engineering teams — mapping BankVerse's architecture to real-world payment infrastructure challenges.**
 
 ---
 
-## Why This Matters to Slice
+## Why This Matters
 
-Slice operates a UPI-linked credit card — one of the most technically demanding products in Indian fintech. Every day, Slice's systems must:
+UPI-linked credit is one of the most technically demanding products in Indian fintech. Every day, FINTECH systems must:
 
-1. **Ingest NPCI settlement files** from HDFC Bank and reconcile thousands of UPI credit repayments against internal loan ledgers
+1. **Ingest NPCI settlement files** from sponsor banks and reconcile thousands of UPI credit repayments against internal loan ledgers
 2. **Manage credit line lifecycles** — origination, draw, interest accrual, EMI conversion, repayment allocation, delinquency tracking
 3. **Maintain absolute financial correctness** across distributed systems where payment providers, webhooks, and network retries fail unpredictably
 4. **Detect and resolve discrepancies** before they become RBI compliance issues
@@ -17,13 +17,13 @@ BankVerse was built to solve exactly these problems. Below is a feature-by-featu
 
 ---
 
-## Feature Map: BankVerse → Slice
+## Feature Map: BankVerse → FINTECH
 
-### 1. NPCI Settlement Reconciliation → Slice's Daily Settlement Workflow
+### 1. NPCI Settlement Reconciliation → Daily Settlement Workflow
 
-| Slice's Problem                                                             | BankVerse's Solution                                                                                                         |
+| FINTECH Problem                                                             | BankVerse's Solution                                                                                                         |
 | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Every morning, download NPCI CSV from HDFC SFTP                             | `NpciSettlementParser.parse()` — RFC 4180 compliant CSV parser with NPCI-specific column mapping                             |
+| Every morning, download NPCI CSV from sponsor bank SFTP                     | `NpciSettlementParser.parse()` — RFC 4180 compliant CSV parser with NPCI-specific column mapping                             |
 | Match thousands of UPI transactions against internal loan repayment records | `ReconciliationEngine.reconcileNormalizedTransactions()` — exact match by UPI reference, fuzzy match by amount + time window |
 | Detect amount mismatches (NPCI says ₹1500, internal ledger says ₹1400)      | `AMOUNT_MISMATCH` detection with difference calculation                                                                      |
 | Find repayments in NPCI file that never hit internal ledger                 | `MISSING_INTERNAL` flagging                                                                                                  |
@@ -35,9 +35,9 @@ BankVerse was built to solve exactly these problems. Below is a feature-by-featu
 
 ---
 
-### 2. Credit Line Engine → Slice's UPI Credit Card Product
+### 2. Credit Line Engine → UPI Credit Card Product
 
-| Slice's Product Feature                                        | BankVerse's Implementation                                                                           |
+| FINTECH Product Feature                                        | BankVerse's Implementation                                                                           |
 | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | Credit line origination with limit assignment                  | `CreditEngine.originateCreditLine()` — configurable limits, APR, bounds validation                   |
 | UPI spend (draw against credit)                                | `CreditEngine.draw()` — validates available credit, records UPI reference                            |
@@ -85,7 +85,7 @@ BankVerse was built to solve exactly these problems. Below is a feature-by-featu
 
 ### 5. Chaos Engineering → Proving Correctness Under Failure
 
-Slice's engineering blog emphasizes reliability. BankVerse includes a **9-scenario chaos lab** that injects real faults and verifies system invariants hold:
+FINTECH engineering demands reliability. BankVerse includes a **9-scenario chaos lab** that injects real faults and verifies system invariants hold:
 
 | Scenario                              | What It Proves                                        |
 | ------------------------------------- | ----------------------------------------------------- |
@@ -106,7 +106,7 @@ Slice's engineering blog emphasizes reliability. BankVerse includes a **9-scenar
 
 ### 6. Incident Detection → Operations Dashboard
 
-When NPCI settlement files have discrepancies, Slice's ops team needs to know immediately:
+When NPCI settlement files have discrepancies, ops teams need to know immediately:
 
 - **IncidentDetector** — 5-minute sliding window correlation, groups related failures
 - **OperationsDashboard** — KPIs, provider health, reconciliation status, incident lifecycle
@@ -117,40 +117,31 @@ When NPCI settlement files have discrepancies, Slice's ops team needs to know im
 
 ---
 
-## Technical Stack Alignment
+## Technical Stack
 
-| Slice's Stack           | BankVerse's Stack                | Overlap                            |
-| ----------------------- | -------------------------------- | ---------------------------------- |
-| Kotlin, Java (backend)  | TypeScript 5 (full-stack)        | Different languages, same patterns |
-| Kafka                   | Transactional Outbox (DB-native) | Event-driven architecture          |
-| Apache Spark            | In-process reconciliation engine | Batch processing mindset           |
-| Postgres, Redshift      | Supabase (Postgres)              | Same SQL fundamentals              |
-| Docker, AWS, Argo CD    | Docker, Docker Compose           | Containerized deployment           |
-| React (web)             | Next.js 16 + React 19            | Same frontend framework            |
-| Flutter, Swift (mobile) | N/A (web-only)                   | —                                  |
+| FINTECH Stack (typical)  | BankVerse's Stack                | Overlap                            |
+| ------------------------ | -------------------------------- | ---------------------------------- |
+| Kotlin, Java (backend)   | TypeScript 5 (full-stack)        | Different languages, same patterns |
+| Kafka                    | Transactional Outbox (DB-native) | Event-driven architecture          |
+| Apache Spark             | In-process reconciliation engine | Batch processing mindset           |
+| Postgres, Redshift       | Supabase (Postgres)              | Same SQL fundamentals              |
+| Docker, AWS, Argo CD     | Docker, Docker Compose           | Containerized deployment           |
+| React (web)              | Next.js 16 + React 19            | Same frontend framework            |
+| Flutter, Swift (mobile)  | N/A (web-only)                   | —                                  |
 
 ---
 
 ## What BankVerse Demonstrates
 
-1. **I understand NPCI settlement files** — not just theoretically, but I've built a parser that handles the exact 13-column format, malformed rows, disputed flags, and batch-level reconciliation.
+1. **NPCI settlement file handling** — not just theoretically, but a parser that handles the exact 13-column format, malformed rows, disputed flags, and batch-level reconciliation.
 
-2. **I understand credit line math** — compound daily interest, EMI amortization, interest-first repayment waterfalls, delinquency bucketing. These aren't abstract concepts; they're implemented and tested.
+2. **Credit line math** — compound daily interest, EMI amortization, interest-first repayment waterfalls, delinquency bucketing. These aren't abstract concepts; they're implemented and tested.
 
-3. **I think in invariants** — `SUM(debits) === SUM(credits)`, version-locked mutations, append-only audit trails. This is the mindset needed for financial infrastructure.
+3. **Invariant-driven thinking** — `SUM(debits) === SUM(credits)`, version-locked mutations, append-only audit trails. This is the mindset needed for financial infrastructure.
 
-4. **I test for failure, not just success** — 87 automated verification tests across 10 phases, including chaos injection, concurrent race conditions, and malformed input handling.
+4. **Testing for failure, not just success** — 87 automated verification tests across 10 phases, including chaos injection, concurrent race conditions, and malformed input handling.
 
-5. **I build for operations, not just development** — Incident detection, reconciliation dashboards, provider health checks. Code that runs in production needs operational visibility.
-
----
-
-## What I'd Love to Learn at Slice
-
-- How does Slice handle NPCI settlement at scale? (Kafka streams? Spark batch?)
-- What's the repayment allocation waterfall? (Any differences from standard interest-first?)
-- How does Slice handle the NBFC → Bank migration for UPI credit?
-- What monitoring/observability patterns does the team use for payment reliability?
+5. **Built for operations, not just development** — Incident detection, reconciliation dashboards, provider health checks. Code that runs in production needs operational visibility.
 
 ---
 

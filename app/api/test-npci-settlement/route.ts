@@ -4,10 +4,10 @@
  * GET /api/test-npci-settlement — Validates the NPCI settlement parser and
  * end-to-end reconciliation against the internal ledger.
  *
- * This is the killer feature for Slice's engineering team: it demonstrates
+ * This is the killer feature for FINTECH engineering teams: it demonstrates
  * that BankVerse can parse real NPCI settlement files, normalize them, and
  * detect discrepancies (amount mismatches, missing internal entries, unsettled
- * transactions) — exactly the problem Slice faces daily with UPI credit repayments.
+ * transactions) — exactly the problem FINTECHs face daily with UPI credit repayments.
  */
 
 import { NextResponse } from "next/server";
@@ -29,26 +29,26 @@ interface TestResult {
 // ─── Sample NPCI CSV with deliberate discrepancies ──────────────
 
 const SAMPLE_NPCI_CSV = `txn_id,settlement_batch,settlement_date,upi_txn_ref,payer_vpa,payer_bank,payee_vpa,payee_bank,amount,currency,status,settlement_flag,remarks
-NPCI_TST_001,SB-TEST-001,2026-08-17T09:30:00Z,UPI_TEST_REF_001,user1@okhdfc,HDFC Bank,slice@hdfc,HDFC Bank,1500.00,INR,SUCCESS,SETTLED,Test UPI repayment
-NPCI_TST_002,SB-TEST-001,2026-08-17T09:45:00Z,UPI_TEST_REF_002,user2@okicici,ICICI Bank,slice@hdfc,HDFC Bank,2500.00,INR,SUCCESS,SETTLED,Test UPI repayment
-NPCI_TST_003,SB-TEST-001,2026-08-17T10:00:00Z,UPI_TEST_REF_003,user3@oksbi,State Bank of India,slice@hdfc,HDFC Bank,499.00,INR,SUCCESS,SETTLED,Test UPI repayment
-NPCI_TST_004,SB-TEST-001,2026-08-17T10:15:00Z,UPI_TEST_REF_004,user4@okaxis,Axis Bank,slice@hdfc,HDFC Bank,12000.00,INR,SUCCESS,SETTLED,Test UPI repayment
-NPCI_TST_005,SB-TEST-001,2026-08-17T10:30:00Z,UPI_TEST_REF_005,user5@okhdfc,HDFC Bank,slice@hdfc,HDFC Bank,3200.00,INR,SUCCESS,SETTLED,Test UPI repayment
-NPCI_TST_006,SB-TEST-001,2026-08-17T10:45:00Z,UPI_TEST_REF_006,user6@okicici,ICICI Bank,slice@hdfc,HDFC Bank,7800.00,INR,SUCCESS,SETTLED,Test UPI repayment
-NPCI_TST_007,SB-TEST-001,2026-08-17T11:00:00Z,UPI_TEST_REF_007,user7@oksbi,State Bank of India,slice@hdfc,HDFC Bank,450.00,INR,SUCCESS,SETTLED,Test UPI repayment
-NPCI_TST_008,SB-TEST-001,2026-08-17T11:15:00Z,UPI_TEST_REF_008,user8@okaxis,Axis Bank,slice@hdfc,HDFC Bank,2200.00,INR,SUCCESS,SETTLED,Test UPI repayment
-NPCI_TST_009,SB-TEST-001,2026-08-17T11:30:00Z,UPI_TEST_REF_009,user9@okhdfc,HDFC Bank,slice@hdfc,HDFC Bank,15000.00,INR,SUCCESS,SETTLED,Test UPI repayment
-NPCI_TST_010,SB-TEST-001,2026-08-17T11:45:00Z,UPI_TEST_REF_010,user10@okicici,ICICI Bank,slice@hdfc,HDFC Bank,950.00,INR,SUCCESS,SETTLED,Test UPI repayment
-NPCI_TST_011,SB-TEST-002,2026-08-17T14:00:00Z,UPI_TEST_REF_011,user11@oksbi,State Bank of India,slice@hdfc,HDFC Bank,6200.00,INR,SUCCESS,SETTLED,Test UPI repayment
-NPCI_TST_012,SB-TEST-002,2026-08-17T14:15:00Z,UPI_TEST_REF_012,user12@okaxis,Axis Bank,slice@hdfc,HDFC Bank,1800.00,INR,SUCCESS,SETTLED,Test UPI repayment
-NPCI_TST_013,SB-TEST-002,2026-08-17T14:30:00Z,UPI_TEST_REF_013,user13@okhdfc,HDFC Bank,slice@hdfc,HDFC Bank,3400.00,INR,SUCCESS,SETTLED,Test UPI repayment
-NPCI_TST_014,SB-TEST-002,2026-08-17T14:45:00Z,UPI_TEST_REF_014,user14@okicici,ICICI Bank,slice@hdfc,HDFC Bank,8900.00,INR,SUCCESS,SETTLED,Test UPI repayment
-NPCI_TST_015,SB-TEST-002,2026-08-17T15:00:00Z,UPI_TEST_REF_015,user15@oksbi,State Bank of India,slice@hdfc,HDFC Bank,1100.00,INR,SUCCESS,SETTLED,Test UPI repayment
-NPCI_TST_016,SB-TEST-002,2026-08-17T15:15:00Z,UPI_TEST_REF_016,user16@okaxis,Axis Bank,slice@hdfc,HDFC Bank,5600.00,INR,SUCCESS,SETTLED,Test UPI repayment
-NPCI_TST_017,SB-TEST-002,2026-08-17T15:30:00Z,UPI_TEST_REF_017,user17@okhdfc,HDFC Bank,slice@hdfc,HDFC Bank,720.00,INR,SUCCESS,SETTLED,Test UPI repayment
-NPCI_TST_018,SB-TEST-002,2026-08-17T15:45:00Z,UPI_TEST_REF_018,user18@okicici,ICICI Bank,slice@hdfc,HDFC Bank,4300.00,INR,SUCCESS,SETTLED,Test UPI repayment
-NPCI_TST_019,SB-TEST-002,2026-08-17T16:00:00Z,UPI_TEST_REF_019,user19@oksbi,State Bank of India,slice@hdfc,HDFC Bank,2100.00,INR,SUCCESS,SETTLED,Test UPI repayment
-NPCI_TST_020,SB-TEST-002,2026-08-17T16:15:00Z,UPI_TEST_REF_020,user20@okaxis,Axis Bank,slice@hdfc,HDFC Bank,9900.00,INR,SUCCESS,SETTLED,Test UPI repayment`;
+NPCI_TST_001,SB-TEST-001,2026-08-17T09:30:00Z,UPI_TEST_REF_001,user1@okhdfc,HDFC Bank,fintech@hdfc,HDFC Bank,1500.00,INR,SUCCESS,SETTLED,Test UPI repayment
+NPCI_TST_002,SB-TEST-001,2026-08-17T09:45:00Z,UPI_TEST_REF_002,user2@okicici,ICICI Bank,fintech@hdfc,HDFC Bank,2500.00,INR,SUCCESS,SETTLED,Test UPI repayment
+NPCI_TST_003,SB-TEST-001,2026-08-17T10:00:00Z,UPI_TEST_REF_003,user3@oksbi,State Bank of India,fintech@hdfc,HDFC Bank,499.00,INR,SUCCESS,SETTLED,Test UPI repayment
+NPCI_TST_004,SB-TEST-001,2026-08-17T10:15:00Z,UPI_TEST_REF_004,user4@okaxis,Axis Bank,fintech@hdfc,HDFC Bank,12000.00,INR,SUCCESS,SETTLED,Test UPI repayment
+NPCI_TST_005,SB-TEST-001,2026-08-17T10:30:00Z,UPI_TEST_REF_005,user5@okhdfc,HDFC Bank,fintech@hdfc,HDFC Bank,3200.00,INR,SUCCESS,SETTLED,Test UPI repayment
+NPCI_TST_006,SB-TEST-001,2026-08-17T10:45:00Z,UPI_TEST_REF_006,user6@okicici,ICICI Bank,fintech@hdfc,HDFC Bank,7800.00,INR,SUCCESS,SETTLED,Test UPI repayment
+NPCI_TST_007,SB-TEST-001,2026-08-17T11:00:00Z,UPI_TEST_REF_007,user7@oksbi,State Bank of India,fintech@hdfc,HDFC Bank,450.00,INR,SUCCESS,SETTLED,Test UPI repayment
+NPCI_TST_008,SB-TEST-001,2026-08-17T11:15:00Z,UPI_TEST_REF_008,user8@okaxis,Axis Bank,fintech@hdfc,HDFC Bank,2200.00,INR,SUCCESS,SETTLED,Test UPI repayment
+NPCI_TST_009,SB-TEST-001,2026-08-17T11:30:00Z,UPI_TEST_REF_009,user9@okhdfc,HDFC Bank,fintech@hdfc,HDFC Bank,15000.00,INR,SUCCESS,SETTLED,Test UPI repayment
+NPCI_TST_010,SB-TEST-001,2026-08-17T11:45:00Z,UPI_TEST_REF_010,user10@okicici,ICICI Bank,fintech@hdfc,HDFC Bank,950.00,INR,SUCCESS,SETTLED,Test UPI repayment
+NPCI_TST_011,SB-TEST-002,2026-08-17T14:00:00Z,UPI_TEST_REF_011,user11@oksbi,State Bank of India,fintech@hdfc,HDFC Bank,6200.00,INR,SUCCESS,SETTLED,Test UPI repayment
+NPCI_TST_012,SB-TEST-002,2026-08-17T14:15:00Z,UPI_TEST_REF_012,user12@okaxis,Axis Bank,fintech@hdfc,HDFC Bank,1800.00,INR,SUCCESS,SETTLED,Test UPI repayment
+NPCI_TST_013,SB-TEST-002,2026-08-17T14:30:00Z,UPI_TEST_REF_013,user13@okhdfc,HDFC Bank,fintech@hdfc,HDFC Bank,3400.00,INR,SUCCESS,SETTLED,Test UPI repayment
+NPCI_TST_014,SB-TEST-002,2026-08-17T14:45:00Z,UPI_TEST_REF_014,user14@okicici,ICICI Bank,fintech@hdfc,HDFC Bank,8900.00,INR,SUCCESS,SETTLED,Test UPI repayment
+NPCI_TST_015,SB-TEST-002,2026-08-17T15:00:00Z,UPI_TEST_REF_015,user15@oksbi,State Bank of India,fintech@hdfc,HDFC Bank,1100.00,INR,SUCCESS,SETTLED,Test UPI repayment
+NPCI_TST_016,SB-TEST-002,2026-08-17T15:15:00Z,UPI_TEST_REF_016,user16@okaxis,Axis Bank,fintech@hdfc,HDFC Bank,5600.00,INR,SUCCESS,SETTLED,Test UPI repayment
+NPCI_TST_017,SB-TEST-002,2026-08-17T15:30:00Z,UPI_TEST_REF_017,user17@okhdfc,HDFC Bank,fintech@hdfc,HDFC Bank,720.00,INR,SUCCESS,SETTLED,Test UPI repayment
+NPCI_TST_018,SB-TEST-002,2026-08-17T15:45:00Z,UPI_TEST_REF_018,user18@okicici,ICICI Bank,fintech@hdfc,HDFC Bank,4300.00,INR,SUCCESS,SETTLED,Test UPI repayment
+NPCI_TST_019,SB-TEST-002,2026-08-17T16:00:00Z,UPI_TEST_REF_019,user19@oksbi,State Bank of India,fintech@hdfc,HDFC Bank,2100.00,INR,SUCCESS,SETTLED,Test UPI repayment
+NPCI_TST_020,SB-TEST-002,2026-08-17T16:15:00Z,UPI_TEST_REF_020,user20@okaxis,Axis Bank,fintech@hdfc,HDFC Bank,9900.00,INR,SUCCESS,SETTLED,Test UPI repayment`;
 
 export async function GET() {
   const results: TestResult[] = [];
@@ -125,10 +125,10 @@ export async function GET() {
   // ─── Test 3: Malformed row detection ─────────────────────────
   try {
     const malformedCsv = `txn_id,settlement_batch,settlement_date,upi_txn_ref,payer_vpa,payer_bank,payee_vpa,payee_bank,amount,currency,status,settlement_flag,remarks
-NPCI_BAD_001,SB-BAD-001,2026-08-17T09:30:00Z,,user1@okhdfc,HDFC Bank,slice@hdfc,HDFC Bank,1500.00,INR,SUCCESS,SETTLED,Missing UPI ref
-NPCI_BAD_002,SB-BAD-001,not-a-date,UPI_BAD_002,user2@okicici,ICICI Bank,slice@hdfc,HDFC Bank,2500.00,INR,SUCCESS,SETTLED,Bad date
-NPCI_BAD_003,SB-BAD-001,2026-08-17T10:00:00Z,UPI_BAD_003,user3@oksbi,State Bank of India,slice@hdfc,HDFC Bank,INVALID,INR,SUCCESS,SETTLED,Bad amount
-,SB-BAD-001,2026-08-17T10:15:00Z,UPI_BAD_004,user4@okaxis,Axis Bank,slice@hdfc,HDFC Bank,12000.00,INR,SUCCESS,SETTLED,Missing txn_id`;
+NPCI_BAD_001,SB-BAD-001,2026-08-17T09:30:00Z,,user1@okhdfc,HDFC Bank,fintech@hdfc,HDFC Bank,1500.00,INR,SUCCESS,SETTLED,Missing UPI ref
+NPCI_BAD_002,SB-BAD-001,not-a-date,UPI_BAD_002,user2@okicici,ICICI Bank,fintech@hdfc,HDFC Bank,2500.00,INR,SUCCESS,SETTLED,Bad date
+NPCI_BAD_003,SB-BAD-001,2026-08-17T10:00:00Z,UPI_BAD_003,user3@oksbi,State Bank of India,fintech@hdfc,HDFC Bank,INVALID,INR,SUCCESS,SETTLED,Bad amount
+,SB-BAD-001,2026-08-17T10:15:00Z,UPI_BAD_004,user4@okaxis,Axis Bank,fintech@hdfc,HDFC Bank,12000.00,INR,SUCCESS,SETTLED,Missing txn_id`;
 
     const parseResult = NpciSettlementParser.parse(malformedCsv);
 
@@ -452,8 +452,8 @@ NPCI_BAD_003,SB-BAD-001,2026-08-17T10:00:00Z,UPI_BAD_003,user3@oksbi,State Bank 
   // ─── Test 9: DISPUTED settlement flag detection ───────────────
   try {
     const disputedCsv = `txn_id,settlement_batch,settlement_date,upi_txn_ref,payer_vpa,payer_bank,payee_vpa,payee_bank,amount,currency,status,settlement_flag,remarks
-NPCI_DSP_001,SB-DSP-001,2026-08-17T09:30:00Z,UPI_DSP_001,user1@okhdfc,HDFC Bank,slice@hdfc,HDFC Bank,5000.00,INR,SUCCESS,DISPUTED,Chargeback dispute
-NPCI_DSP_002,SB-DSP-001,2026-08-17T09:45:00Z,UPI_DSP_002,user2@okicici,ICICI Bank,slice@hdfc,HDFC Bank,3000.00,INR,SUCCESS,UNSETTLED,Pending settlement`;
+NPCI_DSP_001,SB-DSP-001,2026-08-17T09:30:00Z,UPI_DSP_001,user1@okhdfc,HDFC Bank,fintech@hdfc,HDFC Bank,5000.00,INR,SUCCESS,DISPUTED,Chargeback dispute
+NPCI_DSP_002,SB-DSP-001,2026-08-17T09:45:00Z,UPI_DSP_002,user2@okicici,ICICI Bank,fintech@hdfc,HDFC Bank,3000.00,INR,SUCCESS,UNSETTLED,Pending settlement`;
 
     const parseResult = NpciSettlementParser.parse(disputedCsv);
 

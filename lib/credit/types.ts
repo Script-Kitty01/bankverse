@@ -1,7 +1,7 @@
 /**
  * BankVerse — Credit Line Engine Types
  *
- * Models a UPI-linked credit line (like Slice's core product):
+ * Models a UPI-linked credit line (FINTECH UPI credit product):
  * - Credit limit with utilization tracking
  * - Daily compound interest accrual
  * - EMI conversion with principal + interest splits
