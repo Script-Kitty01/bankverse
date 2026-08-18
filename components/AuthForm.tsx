@@ -39,6 +39,12 @@ const AuthForm = ({ type }: AuthFormProps) => {
     setErrorMessage(null);
 
     try {
+      // Demo mode — skip auth entirely, redirect to dashboard
+      if (process.env.NEXT_PUBLIC_DEMO_MODE === "true") {
+        router.push("/");
+        return;
+      }
+
       // Sign up with Supabase and handle Plaid link
       if (type === "sign-up") {
         const newUser = await signUp(data as SignUpParams);

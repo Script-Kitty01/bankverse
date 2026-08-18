@@ -1,4 +1,5 @@
 import AuthForm from "@/components/AuthForm";
+import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -8,6 +9,10 @@ export const metadata: Metadata = {
 };
 
 const SignUp = () => {
+  if (process.env.NEXT_PUBLIC_DEMO_MODE === "true") {
+    redirect("/");
+  }
+
   return (
     <section className="flex-center size-full max-sm:px-6">
       <AuthForm type="sign-up" />
