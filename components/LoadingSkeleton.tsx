@@ -5,11 +5,14 @@ interface SkeletonProps {
 }
 
 export const Skeleton = ({ className }: SkeletonProps) => (
-  <div className={cn("animate-pulse rounded-md bg-gray-200", className)} />
+  <div
+    className={cn("skeleton-shimmer rounded-lg", className)}
+    aria-hidden="true"
+  />
 );
 
 export const CardSkeleton = () => (
-  <div className="rounded-xl border border-gray-200 p-6 space-y-4">
+  <div className="rounded-xl border border-slate-700/40 bg-slate-900/50 p-6 space-y-4">
     <Skeleton className="h-6 w-1/3" />
     <Skeleton className="h-4 w-2/3" />
     <Skeleton className="h-4 w-1/2" />

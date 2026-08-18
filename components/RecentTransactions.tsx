@@ -29,10 +29,10 @@ const RecentTransactions = async () => {
 
       {/* Account Quick Filter Tabs */}
       {accounts.length > 0 && (
-        <div className="flex flex-wrap gap-2 border-b border-gray-200 pb-2">
+        <div className="flex flex-wrap gap-2 border-b border-slate-700 pb-2">
           <Link
             href="/transaction-history"
-            className="px-3 py-1.5 rounded-lg text-13 font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100 transition-all flex items-center gap-1.5"
+            className="px-3 py-1.5 rounded-lg text-13 font-semibold bg-blue-900/30 text-blue-400 hover:bg-blue-900/50 transition-all flex items-center gap-1.5"
           >
             All Banks ({accounts.length})
           </Link>
@@ -40,11 +40,11 @@ const RecentTransactions = async () => {
             <Link
               key={account.id}
               href={`/transaction-history?id=${account.id}`}
-              className="px-3 py-1.5 rounded-lg text-13 font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-all flex items-center gap-1.5"
+              className="px-3 py-1.5 rounded-lg text-13 font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 transition-all flex items-center gap-1.5"
             >
-              <Building2 size={14} className="text-gray-500" />
+              <Building2 size={14} className="text-slate-400" />
               <span>{account.name}</span>
-              <span className="text-11 text-gray-500 font-mono">
+              <span className="text-11 text-slate-400 font-mono">
                 ...{account.mask}
               </span>
             </Link>
@@ -56,7 +56,7 @@ const RecentTransactions = async () => {
         {transactions.length > 0 ? (
           <TransactionsTable transactions={transactions as Transaction[]} />
         ) : (
-          <p className="text-14 text-gray-500">
+          <p className="text-14 text-slate-400">
             Connect a bank account to see your recent transactions.
           </p>
         )}

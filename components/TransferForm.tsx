@@ -38,9 +38,9 @@ const transferSchema = z.object({
   destinationAccountId: z.string().optional(),
   recipientName: z.string().optional(),
   bankName: z.string().optional(),
-  routingNumber: z.string().optional(),
+  ifscCode: z.string().optional(),
   accountNumber: z.string().optional(),
-  accountType: z.enum(["checking", "savings"]).optional(),
+  accountType: z.enum(["current", "savings"]).optional(),
   destinationEmail: z.string().email().optional(),
   transferSpeed: z.enum(["standard", "sameday"]).default("standard"),
   amount: z
@@ -55,7 +55,7 @@ const transferSchema = z.object({
 
 type TransferFormData = z.infer<typeof transferSchema>;
 
-type PaymentMethodTab = "ach" | "razorpay";
+type PaymentMethodTab = "imps_neft" | "razorpay";
 
 const TransferForm = ({ accounts }: { accounts: Account[] }) => {
   const router = useRouter();
@@ -65,7 +65,7 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
     null,
   );
   const [error, setError] = useState<string | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodTab>("ach");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodTab>("imps_neft");
 
   const form = useForm<TransferFormData>({
     resolver: zodResolver(transferSchema),
@@ -76,9 +76,9 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
       destinationAccountId: "",
       recipientName: "",
       bankName: "",
-      routingNumber: "",
+      ifscCode: "",
       accountNumber: "",
-      accountType: "checking",
+      accountType: "savings",
       destinationEmail: "",
       transferSpeed: "standard",
       amount: "",
@@ -126,40 +126,51 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
 
   if (step === "success") {
     return (
-      <div className="glass-card rounded-2xl p-8 md:p-12 flex flex-col items-center justify-center gap-6 border border-emerald-100 bg-gradient-to-b from-emerald-50/30 to-white/90 shadow-xl">
-        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-green-500 shadow-lg">
+      <div className="glass-card rounded-2xl p-8 md:p-12 flex flex-col items-center justify-center gap-6 border border-emerald-500/20 animate-fade-in-scale">
+        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-green-600 shadow-lg shadow-emerald-900/30">
           <CheckCircle size={40} className="text-white" />
         </div>
         <div className="text-center space-y-2">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-12 font-semibold bg-emerald-100 text-emerald-800">
-            {transferData?.direction === "send" ? <ArrowUpRight size={14} /> : <ArrowDownLeft size={14} />}
-            {transferData?.direction === "send" ? "ACH DEBIT SUBMITTED" : "ACH REQUEST SENT"}
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-12 font-semibold bg-emerald-900/30 text-emerald-400 border border-emerald-500/20">
+            {transferData?.direction === "send" ? (
+              <ArrowUpRight size={14} />
+            ) : (
+              <ArrowDownLeft size={14} />
+            )}
+            {transferData?.direction === "send"
+              ? "IMPS/NEFT DEBIT SUBMITTED"
+              : "IMPS/NEFT REQUEST SENT"}
           </span>
-          <h2 className="text-28 font-bold text-gray-900">
-            ACH Transfer Initiated!
+          <h2 className="text-28 font-bold text-slate-50 tracking-tight">
+            Transfer Initiated
           </h2>
-          <p className="text-16 text-gray-600">
-            {formatAmount(Number(transferData?.amount || 0))} via Dwolla ACH Network
+          <p className="text-16 text-slate-400">
+            {formatAmount(Number(transferData?.amount || 0))} via IMPS/NEFT
+            Network
           </p>
         </div>
 
-        <div className="w-full max-w-md rounded-xl bg-gray-50/80 p-4 border border-gray-200 text-14 space-y-2.5">
-          <div className="flex justify-between text-gray-600">
+        <div className="w-full max-w-md rounded-xl bg-slate-800/60 p-4 border border-slate-700/50 text-14 space-y-2.5">
+          <div className="flex justify-between text-slate-400">
             <span>Transfer Speed</span>
-            <span className="font-semibold text-gray-900 capitalize">
-              {transferData?.transferSpeed === "sameday" ? "Same-Day ACH" : "Standard (1-2 Days)"}
+            <span className="font-semibold text-slate-200 capitalize">
+              {transferData?.transferSpeed === "sameday"
+                ? "IMPS (Instant)"
+                : "NEFT (1-2 Hours)"}
             </span>
           </div>
-          <div className="flex justify-between text-gray-600">
+          <div className="flex justify-between text-slate-400">
             <span>Fee</span>
-            <span className="font-medium text-emerald-600">
-              {transferData?.transferSpeed === "sameday" ? "$1.00" : "$0.00 (Free)"}
+            <span className="font-medium text-emerald-400">
+              {transferData?.transferSpeed === "sameday"
+                ? "₹5.00"
+                : "₹0.00 (Free)"}
             </span>
           </div>
-          <div className="flex justify-between text-gray-600">
-            <span>Dwolla Reference</span>
-            <span className="font-mono text-gray-900 text-12">
-              tr_dwolla_{Date.now().toString().slice(-6)}
+          <div className="flex justify-between text-slate-400">
+            <span>Transaction Reference</span>
+            <span className="font-mono text-slate-200 text-12">
+              tr_imps_{Date.now().toString().slice(-6)}
             </span>
           </div>
         </div>
@@ -171,13 +182,13 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
               form.reset();
             }}
             variant="outline"
-            className="flex-1 py-3 text-14 border-gray-300"
+            className="flex-1 py-3 text-14"
           >
             Another Transfer
           </Button>
           <Button
             onClick={() => router.push("/")}
-            className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md py-3 text-14 font-semibold"
+            className="flex-1 py-3 text-14 font-semibold"
           >
             Dashboard
           </Button>
@@ -197,73 +208,80 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
     return (
       <div className="flex flex-col gap-6">
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center justify-center h-8 w-8 rounded-full bg-blue-100 text-blue-700 font-bold text-14">
+          <span className="inline-flex items-center justify-center h-8 w-8 rounded-full bg-blue-900/30 text-blue-400 font-bold text-14">
             2
           </span>
-          <h2 className="text-20 font-bold text-gray-900">
-            Review & Confirm ACH Transfer
+          <h2 className="text-20 font-bold text-slate-100">
+            Review & Confirm Bank Transfer
           </h2>
         </div>
 
-        <div className="glass-card rounded-2xl p-6 space-y-4 border border-blue-100 bg-white shadow-md">
+        <div className="glass-card rounded-2xl p-6 space-y-4 border border-slate-700 shadow-md">
           <div className="flex justify-between text-14">
-            <span className="text-gray-500">Direction</span>
-            <span className="font-semibold text-gray-900 capitalize">
-              {transferData.direction === "send" ? "Send Money (Debit)" : "Request Money (Direct Debit)"}
+            <span className="text-slate-400">Direction</span>
+            <span className="font-semibold text-slate-200 capitalize">
+              {transferData.direction === "send"
+                ? "Send Money (Debit)"
+                : "Request Money (Direct Debit)"}
             </span>
           </div>
 
-          <div className="flex justify-between text-14 border-t pt-3">
-            <span className="text-gray-500">From Funding Account</span>
-            <span className="font-semibold text-gray-900">
+          <div className="flex justify-between text-14 border-t border-slate-700/50 pt-3">
+            <span className="text-slate-400">From Funding Account</span>
+            <span className="font-semibold text-slate-200">
               {sourceAcct?.name} (...{sourceAcct?.mask})
             </span>
           </div>
 
-          <div className="flex justify-between text-14 border-t pt-3">
-            <span className="text-gray-500">To Recipient / Account</span>
-            <span className="font-semibold text-gray-900">
+          <div className="flex justify-between text-14 border-t border-slate-700/50 pt-3">
+            <span className="text-slate-400">To Recipient / Account</span>
+            <span className="font-semibold text-slate-200">
               {transferData.destinationType === "own"
-                ? accounts.find((a) => a.id === transferData.destinationAccountId)?.name || "Own Connected Account"
+                ? accounts.find(
+                    (a) => a.id === transferData.destinationAccountId,
+                  )?.name || "Own Connected Account"
                 : transferData.destinationType === "external_bank"
-                  ? `${transferData.recipientName || "External Recipient"} (${transferData.bankName || "US Bank"} ••••${transferData.accountNumber?.slice(-4) || "0000"})`
+                  ? `${transferData.recipientName || "External Recipient"} (${transferData.bankName || "Indian Bank"} ••••${transferData.accountNumber?.slice(-4) || "0000"})`
                   : transferData.destinationEmail}
             </span>
           </div>
 
-          <div className="flex justify-between text-14 border-t pt-3">
-            <span className="text-gray-500">Transfer Speed</span>
-            <span className="font-semibold text-gray-900">
-              {isSameDay ? "Same-Day ACH (Arrives Today)" : "Standard ACH (1-2 Business Days)"}
+          <div className="flex justify-between text-14 border-t border-slate-700/50 pt-3">
+            <span className="text-slate-400">Transfer Speed</span>
+            <span className="font-semibold text-slate-200">
+              {isSameDay
+                ? "IMPS (Instant — 24×7)"
+                : "NEFT (1-2 Hours — Bank Hours)"}
             </span>
           </div>
 
-          <div className="flex justify-between text-14 border-t pt-3">
-            <span className="text-gray-500">Transfer Fee</span>
-            <span className="font-medium text-emerald-600">
-              {isSameDay ? "$1.00" : "$0.00 (Free)"}
+          <div className="flex justify-between text-14 border-t border-slate-700/50 pt-3">
+            <span className="text-slate-400">Transfer Fee</span>
+            <span className="font-medium text-emerald-400">
+              {isSameDay ? "₹5.00" : "₹0.00 (Free)"}
             </span>
           </div>
 
-          <div className="flex justify-between border-t pt-4 text-16">
-            <span className="font-bold text-gray-900">Total Debit</span>
-            <span className="font-bold text-blue-600">
+          <div className="flex justify-between border-t border-slate-700/50 pt-4 text-16">
+            <span className="font-bold text-slate-100">Total Debit</span>
+            <span className="font-bold text-blue-400">
               {formatAmount(totalAmount)}
             </span>
           </div>
 
           {transferData.description && (
-            <div className="flex justify-between border-t pt-3 text-14">
-              <span className="text-gray-500">Memo / Reference</span>
-              <span className="text-gray-800">{transferData.description}</span>
+            <div className="flex justify-between border-t border-slate-700/50 pt-3 text-14">
+              <span className="text-slate-400">Memo / Reference</span>
+              <span className="text-slate-300">{transferData.description}</span>
             </div>
           )}
         </div>
 
-        <div className="flex items-center gap-2 rounded-xl bg-blue-50 p-3.5 border border-blue-100 text-12 text-blue-800">
-          <ShieldCheck size={18} className="text-blue-600 shrink-0" />
+        <div className="flex items-center gap-2 rounded-xl bg-blue-900/20 p-3.5 border border-blue-800/50 text-12 text-blue-300">
+          <ShieldCheck size={18} className="text-blue-400 shrink-0" />
           <span>
-            Protected by Dwolla ACH Network security. ACH transactions settle through NACHA standards.
+            Protected by NPCI IMPS/NEFT Network security. Transactions settle
+            through RBI-regulated banking standards.
           </span>
         </div>
 
@@ -271,7 +289,7 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
           <Button
             variant="outline"
             onClick={() => setStep("form")}
-            className="flex-1 py-3 border-gray-300"
+            className="flex-1 py-3"
             disabled={isLoading}
           >
             Back
@@ -279,15 +297,15 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
           <Button
             onClick={handleConfirm}
             disabled={isLoading}
-            className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md py-3 font-semibold"
+            className="flex-1 py-3 font-semibold"
           >
             {isLoading ? (
               <>
                 <Loader2 size={16} className="animate-spin mr-2" />
-                Processing ACH...
+                Processing...
               </>
             ) : (
-              "Confirm & Authorize ACH"
+              "Confirm & Authorize"
             )}
           </Button>
         </div>
@@ -298,26 +316,26 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
   return (
     <div className="flex flex-col gap-6">
       {/* Payment Method Tabs */}
-      <div className="flex rounded-xl border border-white/20 p-1 bg-white/50 backdrop-blur-sm">
+      <div className="flex rounded-xl border border-slate-700 p-1 bg-slate-800/50 backdrop-blur-sm">
         <button
           type="button"
-          onClick={() => setPaymentMethod("ach")}
+          onClick={() => setPaymentMethod("imps_neft")}
           className={`flex-1 flex items-center justify-center gap-2 rounded-md py-2.5 text-14 font-medium transition-all ${
-            paymentMethod === "ach"
-              ? "bg-white text-gray-900 shadow-sm"
-              : "text-gray-500 hover:text-gray-700"
+            paymentMethod === "imps_neft"
+              ? "bg-slate-700 text-slate-100 shadow-sm"
+              : "text-slate-400 hover:text-slate-200"
           }`}
         >
           <Building2 size={16} />
-          Bank Transfer (ACH)
+          Bank Transfer (IMPS/NEFT)
         </button>
         <button
           type="button"
           onClick={() => setPaymentMethod("razorpay")}
           className={`flex-1 flex items-center justify-center gap-2 rounded-md py-2.5 text-14 font-medium transition-all ${
             paymentMethod === "razorpay"
-              ? "bg-white text-gray-900 shadow-sm"
-              : "text-gray-500 hover:text-gray-700"
+              ? "bg-slate-700 text-slate-100 shadow-sm"
+              : "text-slate-400 hover:text-slate-200"
           }`}
         >
           <Smartphone size={16} />
@@ -325,12 +343,12 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
         </button>
       </div>
 
-      {/* ACH Transfer Form */}
-      {paymentMethod === "ach" && (
+      {/* Bank Transfer Form */}
+      {paymentMethod === "imps_neft" && (
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
             {error && (
-              <div className="rounded-md bg-red-50 p-3 text-sm text-red-600 border border-red-200">
+              <div className="rounded-md bg-red-900/20 p-3 text-sm text-red-400 border border-red-800/50">
                 {error}
               </div>
             )}
@@ -340,30 +358,30 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
               control={form.control}
               name="direction"
               render={({ field }) => (
-                <div className="flex rounded-xl bg-gray-100 p-1 border border-gray-200">
+                <div className="flex rounded-xl bg-slate-800 p-1 border border-slate-700">
                   <button
                     type="button"
                     onClick={() => field.onChange("send")}
                     className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-14 font-semibold transition-all ${
                       field.value === "send"
-                        ? "bg-white text-blue-700 shadow-sm"
-                        : "text-gray-500 hover:text-gray-900"
+                        ? "bg-slate-700 text-blue-400 shadow-sm"
+                        : "text-slate-400 hover:text-slate-200"
                     }`}
                   >
                     <ArrowUpRight size={16} />
-                    Send ACH Payment
+                    Send via IMPS/NEFT
                   </button>
                   <button
                     type="button"
                     onClick={() => field.onChange("receive")}
                     className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-14 font-semibold transition-all ${
                       field.value === "receive"
-                        ? "bg-white text-emerald-700 shadow-sm"
-                        : "text-gray-500 hover:text-gray-900"
+                        ? "bg-slate-700 text-emerald-400 shadow-sm"
+                        : "text-slate-400 hover:text-slate-200"
                     }`}
                   >
                     <ArrowDownLeft size={16} />
-                    Request ACH Debit
+                    Request Payment
                   </button>
                 </div>
               )}
@@ -379,7 +397,7 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
                   <FormControl>
                     <select
                       {...field}
-                      className="input-class w-full rounded-xl border border-gray-300 p-3 bg-white text-14"
+                      className="input-class w-full rounded-xl border border-slate-600 p-3 bg-slate-800 text-14"
                     >
                       <option value="">Select funding account</option>
                       {accounts.map((account) => (
@@ -396,9 +414,9 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
             />
 
             {selectedAccount && (
-              <p className="text-13 text-gray-500 font-medium">
+              <p className="text-13 text-slate-400 font-medium">
                 Available Balance:{" "}
-                <span className="text-gray-900 font-semibold">
+                <span className="text-slate-200 font-semibold">
                   {formatAmount(selectedAccount.availableBalance)}
                 </span>
               </p>
@@ -410,7 +428,9 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
               name="destinationType"
               render={({ field }) => (
                 <div className="form-item">
-                  <FormLabel className="form-label">Transfer Recipient Type</FormLabel>
+                  <FormLabel className="form-label">
+                    Transfer Recipient Type
+                  </FormLabel>
                   <FormControl>
                     <div className="grid grid-cols-3 gap-2">
                       <button
@@ -418,8 +438,8 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
                         onClick={() => field.onChange("own")}
                         className={`py-2.5 px-3 rounded-xl border text-13 font-medium transition-all ${
                           field.value === "own"
-                            ? "border-blue-500 bg-blue-50 text-blue-700 font-semibold"
-                            : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+                            ? "border-blue-500 bg-blue-900/30 text-blue-400 font-semibold"
+                            : "border-slate-700 bg-slate-800 text-slate-400 hover:border-slate-600"
                         }`}
                       >
                         My Account
@@ -429,19 +449,19 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
                         onClick={() => field.onChange("external_bank")}
                         className={`py-2.5 px-3 rounded-xl border text-13 font-medium transition-all ${
                           field.value === "external_bank"
-                            ? "border-blue-500 bg-blue-50 text-blue-700 font-semibold"
-                            : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+                            ? "border-blue-500 bg-blue-900/30 text-blue-400 font-semibold"
+                            : "border-slate-700 bg-slate-800 text-slate-400 hover:border-slate-600"
                         }`}
                       >
-                        External US Bank
+                        External Indian Bank
                       </button>
                       <button
                         type="button"
                         onClick={() => field.onChange("email")}
                         className={`py-2.5 px-3 rounded-xl border text-13 font-medium transition-all ${
                           field.value === "email"
-                            ? "border-blue-500 bg-blue-50 text-blue-700 font-semibold"
-                            : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+                            ? "border-blue-500 bg-blue-900/30 text-blue-400 font-semibold"
+                            : "border-slate-700 bg-slate-800 text-slate-400 hover:border-slate-600"
                         }`}
                       >
                         Email Invite
@@ -463,7 +483,7 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
                     <FormControl>
                       <select
                         {...field}
-                        className="input-class w-full rounded-xl border border-gray-300 p-3 bg-white text-14"
+                        className="input-class w-full rounded-xl border border-slate-600 p-3 bg-slate-800 text-14"
                       >
                         <option value="">Select account</option>
                         {accounts
@@ -483,10 +503,10 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
 
             {/* Destination External Bank Details */}
             {form.watch("destinationType") === "external_bank" && (
-              <div className="space-y-4 p-5 rounded-2xl bg-blue-50/40 border border-blue-100">
-                <p className="text-14 font-semibold text-gray-900 flex items-center gap-2">
-                  <Building2 size={16} className="text-blue-600" />
-                  External US Bank Routing & Account Details
+              <div className="space-y-4 p-5 rounded-2xl bg-blue-900/10 border border-blue-800/30">
+                <p className="text-14 font-semibold text-slate-200 flex items-center gap-2">
+                  <Building2 size={16} className="text-blue-400" />
+                  External Indian Bank IFSC & Account Details
                 </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -495,9 +515,15 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
                     name="recipientName"
                     render={({ field }) => (
                       <div className="form-item">
-                        <FormLabel className="form-label text-13">Recipient Full Name</FormLabel>
+                        <FormLabel className="form-label text-13">
+                          Recipient Full Name
+                        </FormLabel>
                         <FormControl>
-                          <Input {...field} placeholder="e.g. John Doe" className="input-class bg-white" />
+                          <Input
+                            {...field}
+                            placeholder="e.g. John Doe"
+                            className="input-class"
+                          />
                         </FormControl>
                       </div>
                     )}
@@ -508,9 +534,15 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
                     name="bankName"
                     render={({ field }) => (
                       <div className="form-item">
-                        <FormLabel className="form-label text-13">Bank Name</FormLabel>
+                        <FormLabel className="form-label text-13">
+                          Bank Name
+                        </FormLabel>
                         <FormControl>
-                          <Input {...field} placeholder="e.g. Chase, Bank of America" className="input-class bg-white" />
+                          <Input
+                            {...field}
+                            placeholder="e.g. HDFC Bank, ICICI Bank"
+                            className="input-class"
+                          />
                         </FormControl>
                       </div>
                     )}
@@ -520,12 +552,19 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
-                    name="routingNumber"
+                    name="ifscCode"
                     render={({ field }) => (
                       <div className="form-item">
-                        <FormLabel className="form-label text-13">9-Digit Routing Number (ABA)</FormLabel>
+                        <FormLabel className="form-label text-13">
+                          11-Char IFSC Code
+                        </FormLabel>
                         <FormControl>
-                          <Input {...field} maxLength={9} placeholder="122000218" className="input-class bg-white font-mono" />
+                          <Input
+                            {...field}
+                            maxLength={11}
+                            placeholder="HDFC0000123"
+                            className="input-class font-mono"
+                          />
                         </FormControl>
                       </div>
                     )}
@@ -536,9 +575,15 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
                     name="accountNumber"
                     render={({ field }) => (
                       <div className="form-item">
-                        <FormLabel className="form-label text-13">Account Number</FormLabel>
+                        <FormLabel className="form-label text-13">
+                          Account Number
+                        </FormLabel>
                         <FormControl>
-                          <Input {...field} placeholder="883920194" className="input-class bg-white font-mono" />
+                          <Input
+                            {...field}
+                            placeholder="883920194"
+                            className="input-class font-mono"
+                          />
                         </FormControl>
                       </div>
                     )}
@@ -561,7 +606,7 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
                       <Input
                         {...field}
                         placeholder="recipient@example.com"
-                        className="input-class bg-white"
+                        className="input-class"
                       />
                     </FormControl>
                     <FormMessage className="mt-2 form-message" />
@@ -576,7 +621,7 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
               name="transferSpeed"
               render={({ field }) => (
                 <div className="form-item">
-                  <FormLabel className="form-label">ACH Speed & Fee</FormLabel>
+                  <FormLabel className="form-label">Transfer Speed & Fee</FormLabel>
                   <FormControl>
                     <div className="grid grid-cols-2 gap-3">
                       <button
@@ -584,14 +629,16 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
                         onClick={() => field.onChange("standard")}
                         className={`p-3.5 rounded-xl border flex flex-col gap-1 transition-all ${
                           field.value === "standard"
-                            ? "border-blue-500 bg-blue-50/80 text-blue-900 font-semibold ring-2 ring-blue-500/20"
-                            : "border-gray-200 bg-white text-gray-700"
+                            ? "border-blue-500 bg-blue-900/30 text-blue-300 font-semibold ring-2 ring-blue-500/20"
+                            : "border-slate-700 bg-slate-800 text-slate-400"
                         }`}
                       >
                         <span className="text-14 font-bold flex items-center gap-1.5">
-                          <Clock size={16} className="text-blue-600" /> Standard ACH
+                          <Clock size={16} className="text-blue-400" /> NEFT
                         </span>
-                        <span className="text-12 text-emerald-600 font-medium">$0.00 Fee • 1–2 Business Days</span>
+                        <span className="text-12 text-emerald-400 font-medium">
+                          ₹0.00 Fee • 1–2 Hours (Bank Hours)
+                        </span>
                       </button>
 
                       <button
@@ -599,14 +646,17 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
                         onClick={() => field.onChange("sameday")}
                         className={`p-3.5 rounded-xl border flex flex-col gap-1 transition-all ${
                           field.value === "sameday"
-                            ? "border-blue-500 bg-blue-50/80 text-blue-900 font-semibold ring-2 ring-blue-500/20"
-                            : "border-gray-200 bg-white text-gray-700"
+                            ? "border-blue-500 bg-blue-900/30 text-blue-300 font-semibold ring-2 ring-blue-500/20"
+                            : "border-slate-700 bg-slate-800 text-slate-400"
                         }`}
                       >
                         <span className="text-14 font-bold flex items-center gap-1.5">
-                          <Clock size={16} className="text-purple-600" /> Same-Day ACH
+                          <Clock size={16} className="text-purple-400" />{" "}
+                          IMPS
                         </span>
-                        <span className="text-12 text-purple-700 font-medium">$1.00 Fee • Arrives Today (5 PM EST)</span>
+                        <span className="text-12 text-purple-400 font-medium">
+                          ₹5.00 Fee • Instant (24×7)
+                        </span>
                       </button>
                     </div>
                   </FormControl>
@@ -654,7 +704,10 @@ const TransferForm = ({ accounts }: { accounts: Account[] }) => {
               )}
             />
 
-            <Button type="submit" className="form-btn bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white w-full shadow-md">
+            <Button
+              type="submit"
+              className="form-btn bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white w-full shadow-md"
+            >
               Continue <ArrowRight size={16} className="ml-2" />
             </Button>
           </form>

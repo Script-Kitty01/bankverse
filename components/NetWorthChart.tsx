@@ -46,8 +46,8 @@ const NetWorthChart = ({ data }: NetWorthChartProps) => {
   };
 
   return (
-    <div className="w-full rounded-xl border border-gray-200 p-6">
-      <h3 className="text-18 font-semibold text-gray-900 mb-4">
+    <div className="w-full glass-card rounded-2xl p-6">
+      <h3 className="text-18 font-semibold text-slate-100 mb-4">
         Net Worth Over Time
       </h3>
       <Line
@@ -58,7 +58,7 @@ const NetWorthChart = ({ data }: NetWorthChartProps) => {
             legend: { display: false },
             tooltip: {
               callbacks: {
-                label: (ctx) => `$${ctx.parsed.y.toFixed(2)}`,
+                label: (ctx) => `₹${ctx.parsed.y.toFixed(2)}`,
               },
             },
           },
@@ -66,7 +66,7 @@ const NetWorthChart = ({ data }: NetWorthChartProps) => {
             y: {
               beginAtZero: false,
               ticks: {
-                callback: (value) => `$${value}`,
+                callback: (value) => `₹${value}`,
               },
             },
           },

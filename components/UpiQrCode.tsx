@@ -99,10 +99,10 @@ const UpiQrCode = ({ onSuccess }: UpiQrCodeProps) => {
           <CheckCircle size={36} className="text-white" />
         </div>
         <div className="text-center">
-          <h2 className="text-24 font-semibold text-gray-900">
+          <h2 className="text-24 font-semibold text-slate-100">
             Payment Received!
           </h2>
-          <p className="text-16 text-gray-600 mt-2">
+          <p className="text-16 text-slate-400 mt-2">
             Your UPI payment of {formatAmount(paidAmount)} has been confirmed.
           </p>
         </div>
@@ -119,7 +119,7 @@ const UpiQrCode = ({ onSuccess }: UpiQrCodeProps) => {
   return (
     <div className="flex flex-col gap-6">
       {error && (
-        <div className="rounded-md bg-red-50 p-3 text-sm text-red-600 border border-red-200">
+        <div className="rounded-md bg-red-900/20 p-3 text-sm text-red-400 border border-red-800/50">
           {error}
         </div>
       )}
@@ -150,7 +150,7 @@ const UpiQrCode = ({ onSuccess }: UpiQrCodeProps) => {
 
       {/* QR Code Display */}
       <div className="flex flex-col items-center gap-4 glass-card rounded-2xl p-6">
-        <div className="flex items-center justify-center rounded-xl bg-white p-4 border-2 border-white/30 shadow-inner">
+        <div className="flex items-center justify-center rounded-xl bg-slate-800 p-4 border-2 border-slate-600 shadow-inner">
           <QRCodeSVG
             value={
               amount
@@ -163,29 +163,29 @@ const UpiQrCode = ({ onSuccess }: UpiQrCodeProps) => {
           />
         </div>
 
-        <p className="text-14 text-gray-500 text-center">
+        <p className="text-14 text-slate-400 text-center">
           Scan this QR code with any UPI app to pay
         </p>
 
         {/* UPI ID */}
-        <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5">
-          <Smartphone size={16} className="text-purple-600" />
-          <span className="text-14 font-mono font-medium text-gray-900">
+        <div className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-4 py-2.5">
+          <Smartphone size={16} className="text-purple-400" />
+          <span className="text-14 font-mono font-medium text-slate-100">
             {UPI_ID}
           </span>
           <button
             type="button"
             onClick={handleCopyUpiId}
-            className="ml-2 rounded-md p-1 hover:bg-gray-100 transition-colors"
+            className="ml-2 rounded-md p-1 hover:bg-slate-700 transition-colors"
             title="Copy UPI ID"
           >
             <Copy
               size={14}
-              className={copied ? "text-green-600" : "text-gray-400"}
+              className={copied ? "text-emerald-400" : "text-slate-500"}
             />
           </button>
         </div>
-        {copied && <p className="text-12 text-green-600">UPI ID copied!</p>}
+        {copied && <p className="text-12 text-emerald-400">UPI ID copied!</p>}
       </div>
 
       {/* Simulate Payment Button */}

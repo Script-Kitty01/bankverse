@@ -3,5 +3,9 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  return <main className="bg-animated-gradient min-h-screen">{children}</main>;
+  return (
+    <main className="bg-animated-gradient min-h-screen">
+      <div className="animate-fade-in">{children}</div>
+    </main>
+  );
 }

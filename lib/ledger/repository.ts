@@ -2,7 +2,8 @@
  * BankVerse — Ledger Repository
  *
  * All data access for the double-entry ledger layer.
- * Uses in-memory & Supabase store for high-performance atomic ledger operations.
+ * Uses in-memory demo store (when NEXT_PUBLIC_DEMO_MODE=true) and Supabase client
+ * for high-performance atomic ledger operations.
  */
 
 import type { LedgerAccount, LedgerEntry, PaymentTransaction } from "./types";
@@ -11,7 +12,7 @@ import { createOutboxEvent, outboxStore } from "./outbox";
 // ─── Helpers ────────────────────────────────────────────────────
 
 export function isDemoMode(): boolean {
-  return true;
+  return process.env.NEXT_PUBLIC_DEMO_MODE === "true" || !process.env.NEXT_PUBLIC_DEMO_MODE;
 }
 
 export function generateId(prefix: string): string {

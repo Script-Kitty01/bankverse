@@ -26,9 +26,9 @@ const profileSchema = z.object({
   email: z.string().email("Invalid email"),
   address1: z.string().min(1, "Address is required"),
   city: z.string().min(1, "City is required"),
-  state: z.string().min(2, "State is required").max(2),
-  postalCode: z.string().min(5, "Valid postal code required"),
-  dateOfBirth: z.string().min(1, "Date of birth is required"),
+  state: z.string().min(2, "State is required").max(2, "Use 2-letter state code (e.g. MH, DL, KA)"),
+  postalCode: z.string().min(6, "Valid 6-digit PIN code required").max(6),
+  dateOfBirth: z.string().min(1, "Date of birth is required (DD/MM/YYYY)"),
 });
 
 const passwordSchema = z
@@ -120,8 +120,8 @@ const ProfileForm = ({ user }: { user: User }) => {
         <div
           className={`rounded-md p-3 text-sm border ${
             message.type === "success"
-              ? "bg-green-50 text-green-600 border-green-200"
-              : "bg-red-50 text-red-600 border-red-200"
+              ? "bg-emerald-900/20 text-emerald-400 border-emerald-800/50"
+              : "bg-red-900/20 text-red-400 border-red-800/50"
           }`}
         >
           {message.text}
@@ -130,7 +130,7 @@ const ProfileForm = ({ user }: { user: User }) => {
 
       {/* Profile Form */}
       <div className="glass-card rounded-2xl p-6">
-        <h2 className="text-20 font-semibold text-gray-900 mb-6">
+        <h2 className="text-20 font-semibold text-slate-100 mb-6">
           Personal Information
         </h2>
         <Form {...profileForm}>
@@ -177,7 +177,7 @@ const ProfileForm = ({ user }: { user: User }) => {
                     <Input
                       {...field}
                       disabled
-                      className="input-class bg-gray-50"
+                      className="input-class bg-slate-800/50"
                     />
                   </FormControl>
                   <FormMessage className="mt-1 form-message" />
@@ -218,7 +218,7 @@ const ProfileForm = ({ user }: { user: User }) => {
                 name="state"
                 render={({ field }) => (
                   <div className="form-item">
-                    <FormLabel className="form-label">State</FormLabel>
+                    <FormLabel className="form-label">State (e.g. MH, DL, KA)</FormLabel>
                     <FormControl>
                       <Input {...field} className="input-class" maxLength={2} />
                     </FormControl>
@@ -231,9 +231,9 @@ const ProfileForm = ({ user }: { user: User }) => {
                 name="postalCode"
                 render={({ field }) => (
                   <div className="form-item">
-                    <FormLabel className="form-label">Postal Code</FormLabel>
+                    <FormLabel className="form-label">PIN Code</FormLabel>
                     <FormControl>
-                      <Input {...field} className="input-class" />
+                      <Input {...field} className="input-class" maxLength={6} />
                     </FormControl>
                     <FormMessage className="mt-1 form-message" />
                   </div>
@@ -274,7 +274,7 @@ const ProfileForm = ({ user }: { user: User }) => {
       {/* Password Change */}
       <div className="glass-card rounded-2xl p-6">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-20 font-semibold text-gray-900">Password</h2>
+          <h2 className="text-20 font-semibold text-slate-100">Password</h2>
           <Button
             variant="outline"
             onClick={() => setShowPasswordForm(!showPasswordForm)}
@@ -361,16 +361,16 @@ const ProfileForm = ({ user }: { user: User }) => {
       </div>
 
       {/* Sign Out */}
-      <div className="rounded-xl border border-red-200 p-6">
-        <h2 className="text-20 font-semibold text-red-600 mb-2">Danger Zone</h2>
-        <p className="text-14 text-gray-600 mb-4">
+      <div className="rounded-xl border border-red-800/50 p-6">
+        <h2 className="text-20 font-semibold text-red-400 mb-2">Danger Zone</h2>
+        <p className="text-14 text-slate-400 mb-4">
           Sign out of your account. You will need to sign in again to access
           your dashboard.
         </p>
         <Button
           variant="outline"
           onClick={handleSignOut}
-          className="border-red-300 text-red-600 hover:bg-red-50"
+          className="border-red-800 text-red-400 hover:bg-red-900/20"
         >
           <LogOut size={16} className="mr-2" />
           Sign Out

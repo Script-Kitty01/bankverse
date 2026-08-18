@@ -25,9 +25,8 @@ export const createRazorpayOrder = async (
   currency = "INR",
 ): Promise<RazorpayOrderResponse> => {
   try {
-    // Demo mode or missing/demo Razorpay keys — return mock order
+    // Only use mock when Razorpay keys are missing or explicitly demo keys
     const isDemo =
-      process.env.NEXT_PUBLIC_DEMO_MODE === "true" ||
       !process.env.RAZORPAY_KEY_ID ||
       process.env.RAZORPAY_KEY_ID.startsWith("rzp_test_demo");
 
@@ -74,9 +73,8 @@ export const verifyRazorpayPayment = async (
   signature: string,
 ): Promise<RazorpayVerifyResponse> => {
   try {
-    // Demo mode or mock payment IDs — auto-verify
+    // Only auto-verify for mock payment IDs or missing/demo secrets
     const isDemo =
-      process.env.NEXT_PUBLIC_DEMO_MODE === "true" ||
       orderId.startsWith("order_demo_") ||
       paymentId.startsWith("pay_demo_") ||
       paymentId.startsWith("pay_upi_") ||

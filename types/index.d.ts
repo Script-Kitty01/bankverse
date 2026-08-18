@@ -16,7 +16,7 @@ declare global {
     state: string;
     postalCode: string;
     dateOfBirth: string;
-    ssn: string;
+    pan: string;
     email: string;
     password: string;
   };
@@ -39,7 +39,7 @@ declare global {
     state: string;
     postalCode: string;
     dateOfBirth: string;
-    ssn: string;
+    pan: string;
   };
 
   type NewUserParams = {
@@ -153,7 +153,7 @@ declare global {
     | "Card"
     | "Netbanking"
     | "Wallet"
-    | "ACH"
+    | "IMPS/NEFT"
     | "online"
     | "in store";
 
@@ -167,7 +167,7 @@ declare global {
     state: string;
     postalCode: string;
     dateOfBirth: string;
-    ssn: string;
+    pan: string;
   };
 
   interface CreditCardProps {

@@ -13,7 +13,7 @@ export async function createUserDocument(user: {
   state: string;
   postalCode: string;
   dateOfBirth: string;
-  ssn: string;
+  pan: string;
 }) {
   const supabase = getSupabaseClient();
   const document = {
@@ -27,7 +27,7 @@ export async function createUserDocument(user: {
     state: user.state,
     postalCode: user.postalCode,
     dateOfBirth: user.dateOfBirth,
-    ssn: user.ssn,
+    pan: user.pan,
     dwollaCustomerUrl: "",
     dwollaCustomerId: "",
     createdAt: new Date().toISOString(),
@@ -74,7 +74,7 @@ export async function getUserByAccountId(userId: string) {
     state: "CA",
     postalCode: "94105",
     dateOfBirth: "1990-01-01",
-    ssn: "",
+    pan: "",
     dwollaCustomerUrl: "",
     dwollaCustomerId: "",
   };

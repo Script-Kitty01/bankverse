@@ -1,0 +1,8 @@
+reference,amount,currency,direction,status,date,description
+valid_ref_001,1000.00,INR,CREDIT,SUCCESS,2026-08-16T10:00:00Z,Valid row for baseline
+,1500.00,INR,CREDIT,SUCCESS,2026-08-16T10:05:00Z,Malformed: missing reference
+malformed_ref_002,INVALID_AMOUNT,INR,CREDIT,SUCCESS,2026-08-16T10:10:00Z,Malformed: non-numeric amount
+malformed_ref_003,0.00,INR,CREDIT,SUCCESS,2026-08-16T10:15:00Z,Malformed: zero amount
+malformed_ref_004,2000.00,INVALID_CURR,CREDIT,SUCCESS,2026-08-16T10:20:00Z,Malformed: invalid currency code
+malformed_ref_005,3000.00,INR,CREDIT,SUCCESS,NOT_A_DATE,Malformed: unparseable date
+valid_ref_002,4500.00,INR,DEBIT,SUCCESS,2026-08-16T10:30:00Z,Valid row after malformed sequence

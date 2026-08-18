@@ -27,7 +27,7 @@ export const signUp = async (userData: SignUpParams) => {
     state,
     postalCode,
     dateOfBirth,
-    ssn,
+    pan,
   } = userData;
 
   let newAccountId: string | null = null;
@@ -61,7 +61,7 @@ export const signUp = async (userData: SignUpParams) => {
       state,
       postalCode,
       dateOfBirth,
-      ssn,
+      pan,
     });
 
     await createSessionCookie(email, password);
@@ -138,7 +138,7 @@ export const getCurrentUser = async (): Promise<User | null> => {
       state: "CA",
       postalCode: "94105",
       dateOfBirth: "1990-01-01",
-      ssn: "",
+      pan: "",
     };
   }
 
@@ -162,7 +162,7 @@ export const getCurrentUser = async (): Promise<User | null> => {
       state: userDoc.state,
       postalCode: userDoc.postalCode,
       dateOfBirth: userDoc.dateOfBirth,
-      ssn: userDoc.ssn,
+      pan: userDoc.pan,
     };
   } catch (error) {
     console.error("getCurrentUser error:", error);

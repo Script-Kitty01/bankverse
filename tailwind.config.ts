@@ -97,10 +97,50 @@ const config = {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
+        "fade-in": {
+          from: { opacity: "0", transform: "translateY(8px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        "fade-in-scale": {
+          from: { opacity: "0", transform: "scale(0.96)" },
+          to: { opacity: "1", transform: "scale(1)" },
+        },
+        "slide-up": {
+          from: { opacity: "0", transform: "translateY(16px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        "slide-down": {
+          from: { opacity: "0", transform: "translateY(-8px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        "slide-in-right": {
+          from: { opacity: "0", transform: "translateX(16px)" },
+          to: { opacity: "1", transform: "translateX(0)" },
+        },
+        shimmer: {
+          "0%": { backgroundPosition: "-200% 0" },
+          "100%": { backgroundPosition: "200% 0" },
+        },
+        "pulse-soft": {
+          "0%, 100%": { opacity: "1" },
+          "50%": { opacity: "0.7" },
+        },
+        "float": {
+          "0%, 100%": { transform: "translateY(0px)" },
+          "50%": { transform: "translateY(-4px)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "fade-in": "fade-in 0.5s ease-out both",
+        "fade-in-scale": "fade-in-scale 0.4s ease-out both",
+        "slide-up": "slide-up 0.5s ease-out both",
+        "slide-down": "slide-down 0.3s ease-out both",
+        "slide-in-right": "slide-in-right 0.4s ease-out both",
+        shimmer: "shimmer 2s linear infinite",
+        "pulse-soft": "pulse-soft 2s ease-in-out infinite",
+        float: "float 3s ease-in-out infinite",
       },
     },
   },

@@ -81,11 +81,11 @@ export const exchangePublicToken = async (publicToken: string) => {
 
 /**
  * Add a custom / simulated bank account for the user.
- * Persists in a secure HTTP-only cookie and Appwrite DB if configured.
+ * Persists in a secure HTTP-only cookie and Supabase DB if configured.
  */
 export const addCustomBank = async (params: {
   bankName: string;
-  accountType?: "checking" | "savings" | "credit" | "investment";
+  accountType?: "current" | "savings" | "credit" | "fixed_deposit";
   balance?: number;
   mask?: string;
   officialName?: string;
@@ -109,7 +109,7 @@ export const addCustomBank = async (params: {
     const randomMask =
       params.mask || Math.floor(1000 + Math.random() * 9000).toString();
     const numBalance = params.balance || 5000;
-    const acctType = params.accountType || "checking";
+    const acctType = params.accountType || "savings";
     const timestamp = Date.now();
 
     const newAccount: Account = {
@@ -167,12 +167,12 @@ export const getAccounts = async () => {
         id: "demo-acc-001",
         availableBalance: 4520.5,
         currentBalance: 4820.5,
-        officialName: "Chase Checking",
+        officialName: "HDFC Bank Savings",
         mask: "1234",
         institutionId: "ins_1",
-        name: "Chase Checking",
+        name: "HDFC Bank Savings",
         type: "depository",
-        subtype: "checking",
+        subtype: "savings",
         appwriteItemId: "demo-bank-001",
         sharableId: "demo-share-001",
       },
@@ -180,10 +180,10 @@ export const getAccounts = async () => {
         id: "demo-acc-002",
         availableBalance: 12350.75,
         currentBalance: 12800.75,
-        officialName: "Wells Fargo Savings",
+        officialName: "ICICI Bank Current",
         mask: "5678",
         institutionId: "ins_2",
-        name: "Wells Fargo Savings",
+        name: "ICICI Bank Current",
         type: "depository",
         subtype: "savings",
         appwriteItemId: "demo-bank-002",

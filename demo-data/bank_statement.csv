@@ -1,0 +1,6 @@
+"Txn Date","Value Date","Ref No","Description","Deposit","Withdrawal","Currency","Status"
+"2026-08-16 09:00:00","2026-08-16","BANK_REF_101","NEFT Inward - Customer A","1500.00","","INR","CLEARED"
+"2026-08-16 10:30:00","2026-08-16","BANK_REF_102","IMPS Inward - Merchant B","2500.50","","INR","CLEARED"
+"2026-08-16 11:15:00","2026-08-16","BANK_REF_103","Vendor Payout - AWS Services","","5000.00","INR","PROCESSED"
+"2026-08-16 13:20:00","2026-08-16","BANK_REF_104","RTGS Deposit - Corporate Partner","50000.00","","INR","CLEARED"
+"2026-08-16 15:45:00","2026-08-16","BANK_REF_105","ATM Withdrawal Fee","","150.00","INR","SUCCESS"

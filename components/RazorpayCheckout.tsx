@@ -46,11 +46,31 @@ const UPI_ID = "bankverse@upi";
 
 const POPULAR_BANKS = [
   { id: "hdfc", name: "HDFC Bank", code: "HDFC", bg: "bg-blue-900 text-white" },
-  { id: "icici", name: "ICICI Bank", code: "ICIC", bg: "bg-orange-600 text-white" },
-  { id: "sbi", name: "State Bank of India", code: "SBIN", bg: "bg-sky-600 text-white" },
+  {
+    id: "icici",
+    name: "ICICI Bank",
+    code: "ICIC",
+    bg: "bg-orange-600 text-white",
+  },
+  {
+    id: "sbi",
+    name: "State Bank of India",
+    code: "SBIN",
+    bg: "bg-sky-600 text-white",
+  },
   { id: "axis", name: "Axis Bank", code: "UTIB", bg: "bg-pink-900 text-white" },
-  { id: "kotak", name: "Kotak Mahindra", code: "KKBK", bg: "bg-red-600 text-white" },
-  { id: "pnb", name: "Punjab National Bank", code: "PUNB", bg: "bg-amber-800 text-white" },
+  {
+    id: "kotak",
+    name: "Kotak Mahindra",
+    code: "KKBK",
+    bg: "bg-red-600 text-white",
+  },
+  {
+    id: "pnb",
+    name: "Punjab National Bank",
+    code: "PUNB",
+    bg: "bg-amber-800 text-white",
+  },
 ];
 
 const ALL_BANKS = [
@@ -190,7 +210,6 @@ const RazorpayCheckout = ({ onSuccess }: RazorpayCheckoutProps) => {
 
       const razorpayKey = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID;
       const isDemoMode =
-        process.env.NEXT_PUBLIC_DEMO_MODE === "true" ||
         !razorpayKey ||
         razorpayKey === "rzp_test_demo123" ||
         typeof window === "undefined" ||
@@ -333,19 +352,25 @@ const RazorpayCheckout = ({ onSuccess }: RazorpayCheckoutProps) => {
 
   if (step === "success") {
     return (
-      <div className="glass-card rounded-2xl p-8 md:p-12 flex flex-col items-center justify-center gap-6 border border-emerald-100 bg-gradient-to-b from-emerald-50/30 to-white/90 shadow-xl">
-        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-green-500 shadow-lg">
+      <div className="glass-card rounded-2xl p-8 md:p-12 flex flex-col items-center justify-center gap-6 border border-emerald-500/20 animate-fade-in-scale">
+        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-green-600 shadow-lg shadow-emerald-900/30">
           <CheckCircle size={40} className="text-white" />
         </div>
         <div className="text-center space-y-2">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-12 font-semibold bg-emerald-100 text-emerald-800">
-            {direction === "send" ? <ArrowUpRight size={14} /> : <ArrowDownLeft size={14} />}
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-12 font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            {direction === "send" ? (
+              <ArrowUpRight size={14} />
+            ) : (
+              <ArrowDownLeft size={14} />
+            )}
             {direction === "send" ? "PAYMENT SENT" : "PAYMENT REQUESTED"}
           </span>
-          <h2 className="text-28 font-bold text-gray-900">
-            {direction === "send" ? "Transaction Completed!" : "Payment Link Generated!"}
+          <h2 className="text-28 font-bold text-slate-50 tracking-tight">
+            {direction === "send"
+              ? "Transaction Completed!"
+              : "Payment Link Generated!"}
           </h2>
-          <p className="text-16 text-gray-600">
+          <p className="text-16 text-slate-400">
             {formatAmount(paidAmount)} via {selectedMethod.toUpperCase()}{" "}
             {selectedMethod === "card"
               ? `(${getCardBrand(cardNumber)})`
@@ -355,20 +380,22 @@ const RazorpayCheckout = ({ onSuccess }: RazorpayCheckoutProps) => {
           </p>
         </div>
 
-        <div className="w-full max-w-md rounded-xl bg-gray-50/80 p-4 border border-gray-200 text-14 space-y-2">
-          <div className="flex justify-between text-gray-600">
+        <div className="w-full max-w-md rounded-xl bg-slate-800/50 p-4 border border-slate-700/60 text-14 space-y-2">
+          <div className="flex justify-between text-slate-400">
             <span>Status</span>
-            <span className="font-semibold text-emerald-600 flex items-center gap-1">
+            <span className="font-semibold text-emerald-400 flex items-center gap-1">
               <Check size={14} /> Settled
             </span>
           </div>
-          <div className="flex justify-between text-gray-600">
+          <div className="flex justify-between text-slate-400">
             <span>Provider</span>
-            <span className="font-medium text-gray-900">Razorpay Direct Gateway</span>
+            <span className="font-medium text-slate-200">
+              Razorpay Direct Gateway
+            </span>
           </div>
-          <div className="flex justify-between text-gray-600">
+          <div className="flex justify-between text-slate-400">
             <span>Transaction ID</span>
-            <span className="font-mono text-gray-900 text-12">
+            <span className="font-mono text-slate-200 text-12">
               pay_{selectedMethod}_{Date.now().toString().slice(-6)}
             </span>
           </div>
@@ -384,13 +411,13 @@ const RazorpayCheckout = ({ onSuccess }: RazorpayCheckoutProps) => {
               setCardCvv("");
             }}
             variant="outline"
-            className="flex-1 py-3 text-14 border-gray-300"
+            className="flex-1 py-3 text-14"
           >
             New Payment
           </Button>
           <Button
             onClick={onSuccess}
-            className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md py-3 text-14 font-semibold"
+            className="flex-1 py-3 text-14 font-semibold"
           >
             Done
           </Button>
@@ -409,7 +436,7 @@ const RazorpayCheckout = ({ onSuccess }: RazorpayCheckoutProps) => {
 
       <div className="flex flex-col gap-6">
         {error && (
-          <div className="rounded-xl bg-red-50 p-4 text-sm text-red-600 border border-red-200 flex items-center justify-between">
+          <div className="rounded-xl bg-red-900/20 p-4 text-sm text-red-400 border border-red-800/50 flex items-center justify-between">
             <span>{error}</span>
             <button
               onClick={() => setError(null)}
@@ -421,14 +448,14 @@ const RazorpayCheckout = ({ onSuccess }: RazorpayCheckoutProps) => {
         )}
 
         {/* Direction Switcher: Send vs Receive */}
-        <div className="flex rounded-xl bg-gray-100 p-1 border border-gray-200">
+        <div className="flex rounded-xl bg-slate-800 p-1 border border-slate-700">
           <button
             type="button"
             onClick={() => setDirection("send")}
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-14 font-semibold transition-all ${
               direction === "send"
-                ? "bg-white text-blue-700 shadow-sm"
-                : "text-gray-500 hover:text-gray-900"
+                ? "bg-slate-700 text-blue-400 shadow-sm"
+                : "text-slate-400 hover:text-slate-200"
             }`}
           >
             <ArrowUpRight size={16} />
@@ -439,8 +466,8 @@ const RazorpayCheckout = ({ onSuccess }: RazorpayCheckoutProps) => {
             onClick={() => setDirection("receive")}
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-14 font-semibold transition-all ${
               direction === "receive"
-                ? "bg-white text-emerald-700 shadow-sm"
-                : "text-gray-500 hover:text-gray-900"
+                ? "bg-slate-700 text-emerald-400 shadow-sm"
+                : "text-slate-400 hover:text-slate-200"
             }`}
           >
             <ArrowDownLeft size={16} />
@@ -452,7 +479,7 @@ const RazorpayCheckout = ({ onSuccess }: RazorpayCheckoutProps) => {
         <div className="form-item">
           <Label className="form-label">Amount (INR ₹)</Label>
           <div className="relative">
-            <span className="absolute left-3.5 top-3 text-18 font-semibold text-gray-500">
+            <span className="absolute left-3.5 top-3 text-18 font-semibold text-slate-400">
               ₹
             </span>
             <Input
@@ -492,8 +519,8 @@ const RazorpayCheckout = ({ onSuccess }: RazorpayCheckoutProps) => {
                 onClick={() => setSelectedMethod(method.id)}
                 className={`flex flex-col items-center justify-center gap-2 rounded-xl border p-3.5 transition-all ${
                   selectedMethod === method.id
-                    ? "border-blue-500 bg-gradient-to-b from-blue-50 to-indigo-50 text-blue-700 shadow-md ring-2 ring-blue-500/20 font-semibold"
-                    : "border-gray-200 bg-white/70 text-gray-600 hover:border-blue-300 hover:bg-white"
+                    ? "border-blue-500 bg-gradient-to-b from-blue-900/30 to-indigo-900/30 text-blue-400 shadow-md ring-2 ring-blue-500/20 font-semibold"
+                    : "border-slate-700 bg-slate-800/70 text-slate-400 hover:border-blue-500 hover:bg-slate-700"
                 }`}
               >
                 {method.icon}
@@ -504,7 +531,7 @@ const RazorpayCheckout = ({ onSuccess }: RazorpayCheckoutProps) => {
         </div>
         {/* ================= CARD FORM ================= */}
         {selectedMethod === "card" && (
-          <div className="flex flex-col gap-5 glass-card rounded-2xl p-6 border border-blue-100 bg-gradient-to-b from-blue-50/30 to-white/90">
+          <div className="flex flex-col gap-5 glass-card rounded-2xl p-6 border border-blue-800/30 bg-gradient-to-b from-blue-900/10 to-slate-900/90">
             {/* Interactive Card Graphic */}
             <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-indigo-950 to-blue-900 p-6 text-white shadow-xl">
               <div className="flex justify-between items-start mb-6">
@@ -516,7 +543,7 @@ const RazorpayCheckout = ({ onSuccess }: RazorpayCheckoutProps) => {
                     <div className="h-4 w-7 border border-amber-700/40 rounded-sm" />
                   </div>
                 </div>
-                <span className="px-2.5 py-1 rounded-md text-12 font-extrabold tracking-wider bg-white/10 backdrop-blur-sm border border-white/20">
+                <span className="px-2.5 py-1 rounded-md text-12 font-extrabold tracking-wider bg-white/10 backdrop-blur-sm border border-white/20 text-white">
                   {getCardBrand(cardNumber)}
                 </span>
               </div>
@@ -527,14 +554,18 @@ const RazorpayCheckout = ({ onSuccess }: RazorpayCheckoutProps) => {
 
               <div className="flex justify-between items-end text-12">
                 <div>
-                  <p className="text-10 text-gray-400 uppercase font-medium">Cardholder</p>
-                  <p className="font-semibold uppercase tracking-wider text-gray-100">
+                  <p className="text-10 text-blue-200/60 uppercase font-medium">
+                    Cardholder
+                  </p>
+                  <p className="font-semibold uppercase tracking-wider text-white/90">
                     {cardHolder || "YOUR NAME"}
                   </p>
                 </div>
                 <div>
-                  <p className="text-10 text-gray-400 uppercase font-medium">Expires</p>
-                  <p className="font-mono font-semibold text-gray-100">
+                  <p className="text-10 text-blue-200/60 uppercase font-medium">
+                    Expires
+                  </p>
+                  <p className="font-mono font-semibold text-white/90">
                     {cardExpiry || "MM/YY"}
                   </p>
                 </div>
@@ -562,7 +593,7 @@ const RazorpayCheckout = ({ onSuccess }: RazorpayCheckoutProps) => {
                     onChange={handleCardNumberChange}
                     className="input-class font-mono tracking-wider"
                   />
-                  <span className="absolute right-3 top-3 text-12 font-bold text-blue-600">
+                  <span className="absolute right-3 top-3 text-12 font-bold text-blue-400">
                     {getCardBrand(cardNumber)}
                   </span>
                 </div>
@@ -588,14 +619,16 @@ const RazorpayCheckout = ({ onSuccess }: RazorpayCheckoutProps) => {
                       placeholder="•••"
                       value={cardCvv}
                       onChange={(e) =>
-                        setCardCvv(e.target.value.replace(/\D/g, "").slice(0, 4))
+                        setCardCvv(
+                          e.target.value.replace(/\D/g, "").slice(0, 4),
+                        )
                       }
                       className="input-class font-mono"
                     />
                     <button
                       type="button"
                       onClick={() => setShowCvv(!showCvv)}
-                      className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
+                      className="absolute right-3 top-3 text-slate-500 hover:text-slate-300"
                     >
                       {showCvv ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
@@ -609,9 +642,12 @@ const RazorpayCheckout = ({ onSuccess }: RazorpayCheckoutProps) => {
                   id="saveCard"
                   checked={saveCard}
                   onChange={(e) => setSaveCard(e.target.checked)}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                  className="rounded border-slate-600 text-blue-500 focus:ring-blue-500 h-4 w-4 bg-slate-800"
                 />
-                <label htmlFor="saveCard" className="text-13 text-gray-600 cursor-pointer">
+                <label
+                  htmlFor="saveCard"
+                  className="text-13 text-slate-400 cursor-pointer"
+                >
                   Save card securely for 1-click Razorpay transactions
                 </label>
               </div>
@@ -621,7 +657,7 @@ const RazorpayCheckout = ({ onSuccess }: RazorpayCheckoutProps) => {
 
         {/* ================= NETBANKING FORM ================= */}
         {selectedMethod === "netbanking" && (
-          <div className="flex flex-col gap-5 glass-card rounded-2xl p-6 border border-amber-100 bg-gradient-to-b from-amber-50/20 to-white/90">
+          <div className="flex flex-col gap-5 glass-card rounded-2xl p-6 border border-amber-800/30 bg-gradient-to-b from-amber-900/10 to-slate-900/90">
             <Label className="form-label text-14">Popular Indian Banks</Label>
 
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -632,14 +668,16 @@ const RazorpayCheckout = ({ onSuccess }: RazorpayCheckoutProps) => {
                   onClick={() => setSelectedBank(bank.id)}
                   className={`flex flex-col items-center justify-center p-3.5 rounded-xl border transition-all ${
                     selectedBank === bank.id
-                      ? "border-amber-500 bg-amber-50/80 shadow-md ring-2 ring-amber-500/20 font-bold"
-                      : "border-gray-200 bg-white hover:border-amber-300"
+                      ? "border-amber-500 bg-amber-900/20 shadow-md ring-2 ring-amber-500/20 font-bold"
+                      : "border-slate-700 bg-slate-800 hover:border-amber-500"
                   }`}
                 >
-                  <span className={`px-2 py-0.5 rounded text-10 font-mono font-bold mb-1 ${bank.bg}`}>
+                  <span
+                    className={`px-2 py-0.5 rounded text-10 font-mono font-bold mb-1 ${bank.bg}`}
+                  >
                     {bank.code}
                   </span>
-                  <span className="text-12 text-gray-800 font-medium text-center">
+                  <span className="text-12 text-slate-300 font-medium text-center">
                     {bank.name}
                   </span>
                 </button>
@@ -658,7 +696,7 @@ const RazorpayCheckout = ({ onSuccess }: RazorpayCheckoutProps) => {
                     setOtherBank(e.target.value);
                   }
                 }}
-                className="input-class w-full rounded-xl border border-gray-300 p-3 text-14 bg-white"
+                className="input-class w-full rounded-xl border border-slate-600 p-3 text-14 bg-slate-800"
               >
                 <option value="">Choose your bank</option>
                 {ALL_BANKS.map((b) => (
@@ -670,7 +708,9 @@ const RazorpayCheckout = ({ onSuccess }: RazorpayCheckoutProps) => {
             </div>
 
             <div className="form-item">
-              <Label className="form-label text-13">Bank User ID / Customer ID</Label>
+              <Label className="form-label text-13">
+                Bank User ID / Customer ID
+              </Label>
               <Input
                 placeholder="Enter netbanking User ID or CIF"
                 value={bankUserId}
@@ -679,10 +719,11 @@ const RazorpayCheckout = ({ onSuccess }: RazorpayCheckoutProps) => {
               />
             </div>
 
-            <div className="flex items-center gap-2.5 rounded-xl bg-blue-50/80 p-3 border border-blue-100 text-12 text-blue-800">
-              <ShieldCheck size={18} className="text-blue-600 shrink-0" />
+            <div className="flex items-center gap-2.5 rounded-xl bg-blue-900/20 p-3 border border-blue-800/30 text-12 text-blue-400">
+              <ShieldCheck size={18} className="text-blue-400 shrink-0" />
               <span>
-                You will be redirected to the official bank netbanking gateway with 256-bit SSL encryption.
+                You will be redirected to the official bank netbanking gateway
+                with 256-bit SSL encryption.
               </span>
             </div>
           </div>
@@ -690,8 +731,8 @@ const RazorpayCheckout = ({ onSuccess }: RazorpayCheckoutProps) => {
 
         {/* UPI QR Code Section */}
         {selectedMethod === "upi" && (
-          <div className="flex flex-col items-center gap-4 glass-card rounded-2xl p-6 border border-purple-100 bg-gradient-to-b from-purple-50/50 to-white/80">
-            <div className="flex items-center justify-center rounded-xl bg-white p-4 border-2 border-purple-200 shadow-inner">
+          <div className="flex flex-col items-center gap-4 glass-card rounded-2xl p-6 border border-purple-800/30 bg-gradient-to-b from-purple-900/10 to-slate-900/80">
+            <div className="flex items-center justify-center rounded-xl bg-slate-800 p-4 border-2 border-purple-800/50 shadow-inner">
               <QRCodeSVG
                 value={
                   amount
@@ -704,36 +745,38 @@ const RazorpayCheckout = ({ onSuccess }: RazorpayCheckoutProps) => {
               />
             </div>
 
-            <p className="text-14 text-gray-600 text-center font-medium">
+            <p className="text-14 text-slate-400 text-center font-medium">
               Scan this QR code with Google Pay, PhonePe, Paytm or any UPI app
             </p>
 
             {/* Copyable UPI ID */}
-            <div className="flex items-center gap-2 rounded-lg border border-purple-200 bg-white px-4 py-2 shadow-sm">
-              <Smartphone size={16} className="text-purple-600" />
-              <span className="text-14 font-mono font-semibold text-gray-900">
+            <div className="flex items-center gap-2 rounded-lg border border-purple-800/50 bg-slate-800 px-4 py-2 shadow-sm">
+              <Smartphone size={16} className="text-purple-400" />
+              <span className="text-14 font-mono font-semibold text-slate-100">
                 {UPI_ID}
               </span>
               <button
                 type="button"
                 onClick={handleCopyUpiId}
-                className="ml-2 rounded-md p-1 hover:bg-purple-50 transition-colors text-purple-700"
+                className="ml-2 rounded-md p-1 hover:bg-purple-900/30 transition-colors text-purple-400"
                 title="Copy UPI ID"
               >
                 <Copy
                   size={14}
-                  className={copied ? "text-green-600" : "text-purple-600"}
+                  className={copied ? "text-emerald-400" : "text-purple-400"}
                 />
               </button>
             </div>
             {copied && (
-              <p className="text-12 text-green-600 font-medium">
+              <p className="text-12 text-emerald-400 font-medium">
                 UPI VPA copied to clipboard!
               </p>
             )}
 
-            <div className="w-full form-item pt-2 border-t border-purple-100">
-              <Label className="form-label text-13">Or Pay / Request via Virtual Payment Address (VPA)</Label>
+            <div className="w-full form-item pt-2 border-t border-purple-800/30">
+              <Label className="form-label text-13">
+                Or Pay / Request via Virtual Payment Address (VPA)
+              </Label>
               <Input
                 placeholder="e.g. alex@okaxis, merchant@ybl"
                 value={customVpa}

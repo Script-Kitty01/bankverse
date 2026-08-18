@@ -9,7 +9,7 @@
  *
  * Architecture:
  *   ledger.service.ts   — orchestration (this file)
- *   repository.ts       — data access (demo store + Appwrite CRUD)
+ *   repository.ts       — data access (demo store + Supabase persistence)
  *   validation.ts       — invariants (double-entry, amount checks)
  *   balance.ts          — derived balance computation
  *   types.ts            — shared type definitions

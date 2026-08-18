@@ -30,7 +30,7 @@ const RightSidebar = ({ user, transactions, banks }: RightSidebarProps) => {
           <AddBankModal>
             <div className="flex gap-2 items-center hover:opacity-80 transition-opacity">
               <Image src="/icons/plus.svg" alt="plus" width={20} height={20} />
-              <h2 className="text-14 font-semibold text-gray-600">Add Bank</h2>
+              <h2 className="text-14 font-semibold text-slate-400">Add Bank</h2>
             </div>
           </AddBankModal>
         </div>

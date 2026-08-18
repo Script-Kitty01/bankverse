@@ -1,10 +1,11 @@
 "use client";
 
 /**
- * BankVerse — Chaos Lab Component
+ * BankVerse — Health Monitor
  *
- * Interactive UI for running chaos engineering scenarios.
- * Shows pass/fail results with severity badges and timing.
+ * A clean, live dashboard that shows the health of every payment
+ * pipeline stage. Run a full health check or test individual
+ * services. No clutter — just status, issues, and history.
  */
 
 import { useState, useEffect, useCallback } from "react";
@@ -26,13 +27,9 @@ interface ChaosTestResult {
   scenarioName: string;
   passed: boolean;
   severity: string;
-  injectDescription: string;
-  expectedBehavior: string;
   actualBehavior: string;
-  invariant?: string;
   invariantHeld?: boolean;
   invariantVerification?: string;
-  details: Record<string, unknown>;
   duration: number;
 }
 
@@ -42,48 +39,171 @@ interface ChaosTestReport {
   passed: number;
   failed: number;
   passRate: number;
+  invariantsHeld?: number;
+  invariantRate?: number;
   results: ChaosTestResult[];
 }
 
-// ─── Severity Colors ────────────────────────────────────────────
+// ─── Service definitions ────────────────────────────────────────
 
-const severityColors: Record<string, string> = {
-  LOW: "bg-slate-100 text-slate-700 border-slate-300",
-  MEDIUM: "bg-yellow-100 text-yellow-700 border-yellow-300",
-  HIGH: "bg-orange-100 text-orange-700 border-orange-300",
-  CRITICAL: "bg-red-100 text-red-700 border-red-300",
+interface ServiceStage {
+  id: string;
+  label: string;
+  icon: string;
+  targets: string[];
+}
+
+const SERVICES: ServiceStage[] = [
+  { id: "customer", label: "Customer", icon: "👤", targets: [] },
+  {
+    id: "orchestrator",
+    label: "Orchestrator",
+    icon: "⚙️",
+    targets: ["provider-timeout", "provider-down", "refund-race-condition"],
+  },
+  {
+    id: "psp",
+    label: "Payment Provider",
+    icon: "🏦",
+    targets: [
+      "provider-timeout",
+      "amount-mismatch",
+      "duplicate-charge",
+      "provider-down",
+    ],
+  },
+  {
+    id: "ledger",
+    label: "Ledger",
+    icon: "📒",
+    targets: ["missing-credit", "worker-crash-after-commit"],
+  },
+  {
+    id: "reconciliation",
+    label: "Reconciliation",
+    icon: "🔍",
+    targets: [
+      "amount-mismatch",
+      "duplicate-charge",
+      "missing-credit",
+      "slow-reconciliation",
+      "webhook-out-of-order",
+    ],
+  },
+];
+
+// ─── Helpers ────────────────────────────────────────────────────
+
+function serviceStatus(
+  service: ServiceStage,
+  results: ChaosTestResult[],
+): "healthy" | "degraded" | "failing" | "unknown" {
+  if (service.targets.length === 0) return "healthy";
+  const relevant = results.filter((r) => service.targets.includes(r.scenarioId));
+  if (relevant.length === 0) return "unknown";
+  const allPassed = relevant.every((r) => r.passed);
+  const anyPassed = relevant.some((r) => r.passed);
+  if (allPassed) return "healthy";
+  if (anyPassed) return "degraded";
+  return "failing";
+}
+
+const STATUS_STYLES: Record<string, { dot: string; text: string; bg: string }> = {
+  healthy: {
+    dot: "bg-emerald-500",
+    text: "text-emerald-400",
+    bg: "bg-emerald-500/5 border-emerald-500/20",
+  },
+  degraded: {
+    dot: "bg-yellow-500",
+    text: "text-yellow-400",
+    bg: "bg-yellow-500/5 border-yellow-500/20",
+  },
+  failing: {
+    dot: "bg-red-500",
+    text: "text-red-400",
+    bg: "bg-red-500/5 border-red-500/20",
+  },
+  unknown: {
+    dot: "bg-slate-500",
+    text: "text-slate-400",
+    bg: "bg-slate-500/5 border-slate-500/20",
+  },
 };
 
-// ─── Component ──────────────────────────────────────────────────
+// ─── Main Component ─────────────────────────────────────────────
 
 export default function ChaosLab() {
   const [scenarios, setScenarios] = useState<ChaosScenario[]>([]);
   const [report, setReport] = useState<ChaosTestReport | null>(null);
+  const [runHistory, setRunHistory] = useState<ChaosTestReport[]>([]);
   const [loading, setLoading] = useState(false);
-  const [runningScenario, setRunningScenario] = useState<string | null>(null);
+  const [runningSingle, setRunningSingle] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [showCustomForm, setShowCustomForm] = useState(false);
-  const [customName, setCustomName] = useState("");
-  const [customSeverity, setCustomSeverity] = useState("HIGH");
-  const [customFailureType, setCustomFailureType] = useState("TIMEOUT");
-  const [customLatency, setCustomLatency] = useState("500");
-  const [customFailureRate, setCustomFailureRate] = useState("0.5");
-  const [customSubmitting, setCustomSubmitting] = useState(false);
+  const [progress, setProgress] = useState({ current: 0, total: 0, label: "" });
 
-  // Load scenarios
+  // ─── Load scenarios ───────────────────────────────────────────
   const loadScenarios = useCallback(async () => {
     try {
       const res = await fetch("/api/chaos?action=scenarios");
       const data = await res.json();
       if (data.success) setScenarios(data.scenarios);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError((e as Error).message);
     }
   }, []);
 
-  // Run single scenario
-  const runScenario = useCallback(async (scenarioId: string) => {
-    setRunningScenario(scenarioId);
+  useEffect(() => {
+    loadScenarios();
+  }, [loadScenarios]);
+
+  // ─── Run full health check ────────────────────────────────────
+  const runFullCheck = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    setProgress({ current: 0, total: scenarios.length, label: "" });
+
+    const results: ChaosTestResult[] = [];
+
+    for (let i = 0; i < scenarios.length; i++) {
+      const s = scenarios[i];
+      setProgress({ current: i + 1, total: scenarios.length, label: s.name });
+
+      try {
+        const res = await fetch("/api/chaos", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ scenarioId: s.id, action: "run" }),
+        });
+        const data = await res.json();
+        if (data.success && data.result) results.push(data.result);
+      } catch {
+        // continue
+      }
+    }
+
+    const passed = results.filter((r) => r.passed).length;
+    const invariantsHeld = results.filter((r) => r.invariantHeld).length;
+    const newReport: ChaosTestReport = {
+      runAt: new Date().toISOString(),
+      scenariosRun: results.length,
+      passed,
+      failed: results.length - passed,
+      passRate: results.length > 0 ? passed / results.length : 0,
+      invariantsHeld,
+      invariantRate:
+        results.length > 0 ? invariantsHeld / results.length : 0,
+      results,
+    };
+
+    setReport(newReport);
+    setRunHistory((prev) => [newReport, ...prev].slice(0, 20));
+    setLoading(false);
+  }, [scenarios]);
+
+  // ─── Run single scenario ──────────────────────────────────────
+  const runSingle = useCallback(async (scenarioId: string) => {
+    setRunningSingle(scenarioId);
     setError(null);
     try {
       const res = await fetch("/api/chaos", {
@@ -99,371 +219,375 @@ export default function ChaosLab() {
           if (idx >= 0) results[idx] = data.result;
           else results.push(data.result);
           const passed = results.filter((r) => r.passed).length;
-          return {
+          const invariantsHeld = results.filter(
+            (r) => r.invariantHeld,
+          ).length;
+          const newReport: ChaosTestReport = {
             runAt: new Date().toISOString(),
             scenariosRun: results.length,
             passed,
             failed: results.length - passed,
             passRate: results.length > 0 ? passed / results.length : 0,
+            invariantsHeld,
+            invariantRate:
+              results.length > 0 ? invariantsHeld / results.length : 0,
             results,
           };
+          setRunHistory((h) => [newReport, ...h].slice(0, 20));
+          return newReport;
         });
-      }
-    } catch (e: any) {
-      setError(e.message);
-    } finally {
-      setRunningScenario(null);
-    }
-  }, []);
-
-  // Run all scenarios
-  const runAll = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/chaos", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "run-all" }),
-      });
-      const data = await res.json();
-      if (data.success && data.report) {
-        setReport(data.report);
-      }
-    } catch (e: any) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-  const handleCustomInject = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!customName.trim()) return;
-    setCustomSubmitting(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/chaos", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "create-custom",
-          name: customName,
-          severity: customSeverity,
-          failureType: customFailureType,
-          latencyMs: Number(customLatency) || 300,
-          failureRate: Number(customFailureRate) || 0,
-        }),
-      });
-      const data = await res.json();
-      if (data.success && data.result) {
-        setReport((prev) => {
-          const results = prev ? [...prev.results] : [];
-          const idx = results.findIndex((r) => r.scenarioId === data.scenario.id);
-          if (idx >= 0) results[idx] = data.result;
-          else results.push(data.result);
-          const passed = results.filter((r) => r.passed).length;
-          return {
-            runAt: new Date().toISOString(),
-            scenariosRun: results.length,
-            passed,
-            failed: results.length - passed,
-            passRate: results.length > 0 ? passed / results.length : 0,
-            invariantsHeld: results.filter((r) => r.invariantHeld).length,
-            invariantRate: results.length > 0 ? results.filter((r) => r.invariantHeld).length / results.length : 0,
-            results,
-          };
-        });
-        await loadScenarios();
-        setShowCustomForm(false);
-        setCustomName("");
-      } else if (data.error) {
-        setError(data.error);
       }
     } catch (e: unknown) {
       setError((e as Error).message);
     } finally {
-      setCustomSubmitting(false);
+      setRunningSingle(null);
     }
-  };
+  }, []);
 
+  // ─── Export ───────────────────────────────────────────────────
+  const exportReport = useCallback(
+    (format: "json" | "csv") => {
+      if (!report) return;
+      let content: string;
+      let filename: string;
+      let mime: string;
 
-  // Load scenarios on mount
-  useEffect(() => {
-    loadScenarios();
-  }, [loadScenarios]);
+      if (format === "json") {
+        content = JSON.stringify(report, null, 2);
+        filename = `health-check-${new Date().toISOString().slice(0, 10)}.json`;
+        mime = "application/json";
+      } else {
+        const headers = [
+          "Scenario",
+          "Severity",
+          "Passed",
+          "Duration (ms)",
+          "Invariant Held",
+          "Actual Behavior",
+        ];
+        const rows = report.results.map((r) =>
+          [
+            `"${r.scenarioName}"`,
+            r.severity,
+            r.passed ? "PASS" : "FAIL",
+            r.duration,
+            r.invariantHeld ? "YES" : "NO",
+            `"${(r.actualBehavior || "").replace(/"/g, '""')}"`,
+          ].join(","),
+        );
+        content = [headers.join(","), ...rows].join("\n");
+        filename = `health-check-${new Date().toISOString().slice(0, 10)}.csv`;
+        mime = "text/csv";
+      }
 
+      const blob = new Blob([content], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    },
+    [report],
+  );
+
+  // ─── Compute overall status ───────────────────────────────────
+  const overallStatus: "healthy" | "degraded" | "failing" | "unknown" = report
+    ? report.passRate >= 0.9
+      ? "healthy"
+      : report.passRate >= 0.5
+        ? "degraded"
+        : "failing"
+    : "unknown";
+
+  const statusBanner = {
+    healthy: {
+      emoji: "🟢",
+      text: "All Systems Operational",
+      sub: "Every payment pipeline stage passed its health check.",
+    },
+    degraded: {
+      emoji: "🟡",
+      text: "Degraded Service",
+      sub: `${report?.failed ?? 0} check(s) failed. Some services may be impacted.`,
+    },
+    failing: {
+      emoji: "🔴",
+      text: "Service Outage",
+      sub: `${report?.failed ?? 0} check(s) failed. Immediate attention required.`,
+    },
+    unknown: {
+      emoji: "⚪",
+      text: "No Health Data",
+      sub: "Run a health check to verify all payment services.",
+    },
+  }[overallStatus];
+
+  const issues = report?.results.filter((r) => !r.passed) ?? [];
+
+  // ─── Render ───────────────────────────────────────────────────
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Chaos Lab</h2>
-          <p className="text-sm text-gray-500 mt-1">
-            Test system resilience against failure scenarios
-          </p>
+      {/* ── Status Banner ── */}
+      <div
+        className={`p-5 rounded-xl border ${STATUS_STYLES[overallStatus].bg}`}
+      >
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+              <span>{statusBanner.emoji}</span>
+              {statusBanner.text}
+            </h2>
+            <p className="text-sm text-slate-400 mt-1">{statusBanner.sub}</p>
+            {report && (
+              <p className="text-xs text-slate-500 mt-1">
+                Last checked: {new Date(report.runAt).toLocaleString()}
+              </p>
+            )}
+          </div>
+          <div className="flex gap-2 shrink-0">
+            {report && (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => exportReport("json")}
+                  className="border-slate-700 text-slate-400 hover:text-white text-xs"
+                >
+                  📥 JSON
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => exportReport("csv")}
+                  className="border-slate-700 text-slate-400 hover:text-white text-xs"
+                >
+                  📊 CSV
+                </Button>
+              </>
+            )}
+            <Button
+              onClick={runFullCheck}
+              disabled={loading}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs"
+            >
+              {loading
+                ? `Checking ${progress.current}/${progress.total}...`
+                : "🩺 Run Health Check"}
+            </Button>
+          </div>
         </div>
-        <div className="flex gap-3">
-          <Button
-            variant="outline"
-            onClick={() => setShowCustomForm(!showCustomForm)}
-          >
-            {showCustomForm ? "Cancel Custom" : "+ Inject Custom Scenario"}
-          </Button>
-          <Button variant="outline" onClick={loadScenarios} disabled={loading}>
-            Refresh
-          </Button>
-          <Button
-            onClick={runAll}
-            disabled={loading}
-            className="bg-indigo-600 hover:bg-indigo-700"
-          >
-            {loading ? "Running..." : "Run All Scenarios"}
-          </Button>
-        </div>
+
+        {/* Progress bar */}
+        {loading && (
+          <div className="mt-3 space-y-1">
+            <div className="flex justify-between text-[10px] text-slate-500">
+              <span>{progress.label}</span>
+              <span>
+                {progress.current}/{progress.total}
+              </span>
+            </div>
+            <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-indigo-500 to-emerald-500 rounded-full transition-all duration-300"
+                style={{
+                  width: `${progress.total > 0 ? (progress.current / progress.total) * 100 : 0}%`,
+                }}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Error */}
+      {/* ── Error ── */}
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-          {error}
-        </div>
-      )}
-      {/* Custom Scenario Form */}
-      {showCustomForm && (
-        <form
-          onSubmit={handleCustomInject}
-          className="p-5 bg-white border border-indigo-200 rounded-xl shadow-sm space-y-4"
-        >
-          <h3 className="font-bold text-gray-900 text-base">
-            Inject Custom Chaos Failure Scenario
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Scenario Name
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. Gateway Timeout & 50% Drop"
-                value={customName}
-                onChange={(e) => setCustomName(e.target.value)}
-                className="w-full text-xs p-2 border border-gray-300 rounded-lg"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Failure Mode
-              </label>
-              <select
-                value={customFailureType}
-                onChange={(e) => setCustomFailureType(e.target.value)}
-                className="w-full text-xs p-2 border border-gray-300 rounded-lg bg-white"
-              >
-                <option value="TIMEOUT">PSP Gateway Timeout (504)</option>
-                <option value="AMOUNT_MISMATCH">10x Amount Mismatch</option>
-                <option value="PROVIDER_DOWN">Provider Unreachable (500)</option>
-                <option value="DUPLICATE_CHARGE">Duplicate PSP Charge</option>
-                <option value="MISSING_CREDIT">Debit Without Credit Imbalance</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Severity Level
-              </label>
-              <select
-                value={customSeverity}
-                onChange={(e) => setCustomSeverity(e.target.value)}
-                className="w-full text-xs p-2 border border-gray-300 rounded-lg bg-white"
-              >
-                <option value="LOW">LOW</option>
-                <option value="MEDIUM">MEDIUM</option>
-                <option value="HIGH">HIGH</option>
-                <option value="CRITICAL">CRITICAL</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Simulated Latency (ms)
-              </label>
-              <input
-                type="number"
-                value={customLatency}
-                onChange={(e) => setCustomLatency(e.target.value)}
-                className="w-full text-xs p-2 border border-gray-300 rounded-lg"
-                min="0"
-                max="10000"
-              />
-            </div>
-          </div>
-          <div className="flex justify-end gap-3 pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setShowCustomForm(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              size="sm"
-              disabled={customSubmitting}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white"
-            >
-              {customSubmitting ? "Injecting..." : "Inject & Run Scenario"}
-            </Button>
-          </div>
-        </form>
-      )}
-
-
-      {/* Report Summary */}
-      {report && (
-        <div className="p-4 bg-white border rounded-xl shadow-sm">
-          <div className="flex items-center gap-4">
-            <div className="text-3xl font-bold">
-              {(report.passRate * 100).toFixed(0)}%
-            </div>
-            <div className="text-sm text-gray-500">
-              <span className="text-green-600 font-semibold">
-                {report.passed} passed
-              </span>
-              {" / "}
-              <span className="text-red-600 font-semibold">
-                {report.failed} failed
-              </span>
-              {" / "}
-              <span>{report.scenariosRun} total</span>
-            </div>
-            <div className="flex-1" />
-            <div className="text-xs text-gray-400">
-              Run at {new Date(report.runAt).toLocaleTimeString()}
-            </div>
-          </div>
-          {/* Progress bar */}
-          <div className="mt-3 h-2 bg-gray-100 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-green-500 transition-all duration-500"
-              style={{ width: `${report.passRate * 100}%` }}
-            />
-          </div>
+        <div className="p-3 bg-red-950/50 border border-red-800 rounded-lg text-red-400 text-xs flex items-center gap-2">
+          <span>⚠️</span> {error}
+          <button
+            onClick={() => setError(null)}
+            className="ml-auto text-red-500 hover:text-red-300"
+          >
+            ✕
+          </button>
         </div>
       )}
 
-      {/* Scenarios Grid */}
-      <div className="grid gap-4">
-        {scenarios.map((scenario) => {
-          const result = report?.results.find(
-            (r) => r.scenarioId === scenario.id,
-          );
-          const isRunning = runningScenario === scenario.id;
+      {/* ── Service Cards ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        {SERVICES.map((service) => {
+          const status = report
+            ? serviceStatus(service, report.results)
+            : "unknown";
+          const style = STATUS_STYLES[status];
+          const relevant = report
+            ? report.results.filter((r) =>
+                service.targets.includes(r.scenarioId),
+              )
+            : [];
+          const passed = relevant.filter((r) => r.passed).length;
 
           return (
             <div
-              key={scenario.id}
-              className={`p-4 bg-white border rounded-xl shadow-sm transition-all ${
-                result
-                  ? result.passed
-                    ? "border-green-300 bg-green-50/30"
-                    : "border-red-300 bg-red-50/30"
-                  : "border-gray-200"
-              }`}
+              key={service.id}
+              className={`p-4 rounded-xl border ${style.bg} transition-all duration-300`}
             >
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-semibold text-gray-900">
-                      {scenario.name}
-                    </h3>
-                    <span
-                      className={`text-xs px-2 py-0.5 rounded-full border font-medium ${
-                        severityColors[scenario.severity] || severityColors.LOW
-                      }`}
-                    >
-                      {scenario.severity}
-                    </span>
-                    {result && (
-                      <span
-                        className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                          result.passed
-                            ? "bg-green-100 text-green-700 border border-green-300"
-                            : "bg-red-100 text-red-700 border border-red-300"
-                        }`}
-                      >
-                        {result.passed ? "PASSED" : "FAILED"}
-                      </span>
-                    )}
-                    {isRunning && (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-300 animate-pulse">
-                        RUNNING...
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-gray-500 mt-1">
-                    {scenario.description}
-                  </p>
-
-                  {/* Details */}
-                  <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
-                    <div className="p-2 bg-gray-50 rounded">
-                      <span className="font-medium text-gray-700">Inject:</span>{" "}
-                      <span className="text-gray-500">
-                        {scenario.injectDescription}
-                      </span>
-                    </div>
-                    <div className="p-2 bg-gray-50 rounded">
-                      <span className="font-medium text-gray-700">Expect:</span>{" "}
-                      <span className="text-gray-500">
-                        {scenario.expectedBehavior}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Result */}
-                  {result && (
-                    <div className="mt-3 p-3 bg-white border rounded-lg">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-sm text-gray-700">
-                          Actual:
-                        </span>
-                        <span
-                          className={`text-sm ${
-                            result.passed ? "text-green-700" : "text-red-700"
-                          }`}
-                        >
-                          {result.actualBehavior}
-                        </span>
-                        <span className="text-xs text-gray-400 ml-auto">
-                          {result.duration}ms
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => runScenario(scenario.id)}
-                  disabled={isRunning || loading}
-                  className="shrink-0"
-                >
-                  {isRunning ? "Running..." : "Run"}
-                </Button>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-lg">{service.icon}</span>
+                <span className="text-xs font-semibold text-slate-300">
+                  {service.label}
+                </span>
               </div>
+              <div className="flex items-center gap-1.5">
+                <span
+                  className={`w-2 h-2 rounded-full ${style.dot} ${status !== "unknown" ? "animate-pulse" : ""}`}
+                />
+                <span className={`text-xs font-medium capitalize ${style.text}`}>
+                  {status}
+                </span>
+              </div>
+              {relevant.length > 0 && (
+                <p className="text-[10px] text-slate-500 mt-1">
+                  {passed}/{relevant.length} checks passed
+                </p>
+              )}
+              {service.targets.length === 0 && (
+                <p className="text-[10px] text-slate-600 mt-1">
+                  No checks needed
+                </p>
+              )}
             </div>
           );
         })}
+      </div>
 
-        {scenarios.length === 0 && !loading && (
-          <div className="text-center py-12 text-gray-400">
-            <p className="text-lg">No scenarios loaded</p>
-            <Button variant="outline" onClick={loadScenarios} className="mt-3">
-              Load Scenarios
-            </Button>
+      {/* ── Two-column: Issues + History ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Issues */}
+        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-slate-200">
+              {issues.length > 0
+                ? `⚠️ Issues (${issues.length})`
+                : "✅ No Issues"}
+            </h3>
+            {scenarios.length > 0 && (
+              <select
+                onChange={(e) => {
+                  if (e.target.value) runSingle(e.target.value);
+                }}
+                value=""
+                className="text-[10px] p-1.5 bg-slate-800 border border-slate-700 rounded text-slate-300"
+              >
+                <option value="">Run single check...</option>
+                {scenarios.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
-        )}
+          <div className="divide-y divide-slate-800 max-h-[400px] overflow-y-auto">
+            {!report && (
+              <div className="flex flex-col items-center justify-center py-12 text-slate-600">
+                <span className="text-3xl mb-2">🩺</span>
+                <p className="text-xs">Run a health check to see results</p>
+              </div>
+            )}
+            {report &&
+              report.results.map((r) => (
+                <div
+                  key={r.scenarioId}
+                  className="px-4 py-3 flex items-center gap-3 hover:bg-slate-800/30 transition-colors"
+                >
+                  <span className="text-sm shrink-0">
+                    {runningSingle === r.scenarioId
+                      ? "⏳"
+                      : r.passed
+                        ? "✅"
+                        : "❌"}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-slate-200 truncate">
+                      {r.scenarioName}
+                    </p>
+                    <p className="text-[10px] text-slate-500 truncate">
+                      {r.actualBehavior}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className="text-[10px] text-slate-600 tabular-nums">
+                      {r.duration}ms
+                    </span>
+                    {r.invariantHeld !== undefined && (
+                      <span
+                        className={`ml-2 text-[10px] font-bold ${r.invariantHeld ? "text-emerald-400" : "text-red-400"}`}
+                      >
+                        {r.invariantHeld ? "🔒" : "🔓"}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+          </div>
+        </div>
+
+        {/* History */}
+        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-800">
+            <h3 className="text-sm font-semibold text-slate-200">
+              📜 Recent Checks
+            </h3>
+          </div>
+          <div className="max-h-[400px] overflow-y-auto">
+            {runHistory.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-slate-600">
+                <span className="text-3xl mb-2">📜</span>
+                <p className="text-xs">History appears after your first check</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-800">
+                {runHistory.map((h, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setReport(h)}
+                    className="w-full px-4 py-3 flex items-center gap-3 hover:bg-slate-800/30 transition-colors text-left"
+                  >
+                    <span
+                      className={`text-lg shrink-0 ${h.passRate >= 0.9 ? "" : h.passRate >= 0.5 ? "opacity-70" : "opacity-40"}`}
+                    >
+                      {h.passRate >= 0.9
+                        ? "🟢"
+                        : h.passRate >= 0.5
+                          ? "🟡"
+                          : "🔴"}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-slate-200">
+                        #{runHistory.length - i} —{" "}
+                        {Math.round(h.passRate * 100)}% healthy
+                      </p>
+                      <p className="text-[10px] text-slate-500">
+                        {new Date(h.runAt).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span className="text-[10px] text-emerald-400 font-bold">
+                        {h.passed}
+                      </span>
+                      <span className="text-[10px] text-slate-600"> / </span>
+                      <span className="text-[10px] text-red-400 font-bold">
+                        {h.failed}
+                      </span>
+                      <span className="text-[10px] text-slate-600">
+                        {" "}
+                        passed
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

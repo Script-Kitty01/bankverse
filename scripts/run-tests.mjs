@@ -13,12 +13,56 @@ process.env.NEXT_PUBLIC_DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE || "true";
 const BASE_URL = process.env.TEST_URL || "http://localhost:3000";
 
 const ENDPOINTS = [
-  { name: "Phase 1: Ledger & Balance Invariants", path: "/api/test-ledger", file: "./app/api/test-ledger/route.ts" },
-  { name: "Phase 2: State Machine & OCC Concurrent Race", path: "/api/test-payment", file: "./app/api/test-payment/route.ts" },
-  { name: "Phase 3: Internal/External Reconciliation", path: "/api/test-reconciliation", file: "./app/api/test-reconciliation/route.ts" },
-  { name: "Phase 4: Fault Injection & Chaos Scenarios", path: "/api/test-chaos", file: "./app/api/test-chaos/route.ts" },
-  { name: "Phase 5: Incident Detection & Operations", path: "/api/test-operations", file: "./app/api/test-operations/route.ts" },
-  { name: "E2E: DEBIT_WITHOUT_MERCHANT_SETTLEMENT Recovery Lifecycle", path: "/api/test-debit-without-credit", file: "./app/api/test-debit-without-credit/route.ts" },
+  {
+    name: "Phase 1: Ledger & Balance Invariants",
+    path: "/api/test-ledger",
+    file: "./app/api/test-ledger/route.ts",
+  },
+  {
+    name: "Phase 2: State Machine & OCC Concurrent Race",
+    path: "/api/test-payment",
+    file: "./app/api/test-payment/route.ts",
+  },
+  {
+    name: "Phase 3: Internal/External Reconciliation",
+    path: "/api/test-reconciliation",
+    file: "./app/api/test-reconciliation/route.ts",
+  },
+  {
+    name: "Phase 4: Fault Injection & Chaos Scenarios",
+    path: "/api/test-chaos",
+    file: "./app/api/test-chaos/route.ts",
+  },
+  {
+    name: "Phase 5: Incident Detection & Operations",
+    path: "/api/test-operations",
+    file: "./app/api/test-operations/route.ts",
+  },
+  {
+    name: "Phase 6: Transaction Log Ingestion & Auto-Solve Engine",
+    path: "/api/test-ingest",
+    file: "./app/api/test-ingest/route.ts",
+  },
+  {
+    name: "Phase 7: Normalized Transaction Ingestion Pipeline",
+    path: "/api/test-normalized-ingest",
+    file: "./app/api/test-normalized-ingest/route.ts",
+  },
+  {
+    name: "E2E: DEBIT_WITHOUT_MERCHANT_SETTLEMENT Recovery Lifecycle",
+    path: "/api/test-debit-without-credit",
+    file: "./app/api/test-debit-without-credit/route.ts",
+  },
+  {
+    name: "Phase 9: NPCI Settlement Reconciliation",
+    path: "/api/test-npci-settlement",
+    file: "./app/api/test-npci-settlement/route.ts",
+  },
+  {
+    name: "Phase 10: Credit Line Engine (UPI Credit Card)",
+    path: "/api/test-credit",
+    file: "./app/api/test-credit/route.ts",
+  },
 ];
 
 async function fetchJson(url) {
@@ -57,7 +101,9 @@ async function run() {
       try {
         res = await runInProcess(ep.file);
       } catch (inProcErr) {
-        console.log(`  ❌ [FAIL] ${ep.name}: Execution error - ${inProcErr.message}`);
+        console.log(
+          `  ❌ [FAIL] ${ep.name}: Execution error - ${inProcErr.message}`,
+        );
         totalFailed++;
         console.log("");
         continue;
@@ -81,7 +127,9 @@ async function run() {
           console.log(`  ✅ [PASS] ${test.name}`);
           totalPassed++;
         } else {
-          console.log(`  ❌ [FAIL] ${test.name}: ${test.details || test.error || "Failed"}`);
+          console.log(
+            `  ❌ [FAIL] ${test.name}: ${test.details || test.error || "Failed"}`,
+          );
           totalFailed++;
         }
       }
@@ -94,14 +142,18 @@ async function run() {
         totalFailed++;
       }
     } else {
-      console.log(`  ℹ️ Completed ${ep.name}: ${res.summary || JSON.stringify(res)}`);
+      console.log(
+        `  ℹ️ Completed ${ep.name}: ${res.summary || JSON.stringify(res)}`,
+      );
       totalPassed++;
     }
     console.log("");
   }
 
   console.log("-------------------------------------------------------");
-  console.log(`Total Verification Runs: ${totalPassed} passed, ${totalFailed} failed.`);
+  console.log(
+    `Total Verification Runs: ${totalPassed} passed, ${totalFailed} failed.`,
+  );
   console.log("=======================================================\n");
 
   if (totalFailed > 0) {

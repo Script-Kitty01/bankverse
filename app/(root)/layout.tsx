@@ -17,17 +17,25 @@ export default async function RootLayout({
   }
 
   return (
-    <main className="flex h-screen w-full font-inter bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+    <main className="flex h-screen w-full font-inter bg-slate-950">
       <Sidebar user={loggedIn} />
 
       <div className="flex size-full flex-col">
         <div className="root-layout">
-          <Image src="/icons/logo.svg" width={30} height={30} alt="logo" />
+          <div className="flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 shadow-md shadow-blue-900/20">
+            <Image
+              src="/icons/logo.svg"
+              width={18}
+              height={18}
+              alt="BankVerse"
+              className="brightness-0 invert"
+            />
+          </div>
           <div>
             <MobileNav user={loggedIn} />
           </div>
         </div>
-        {children}
+        <div className="animate-fade-in">{children}</div>
       </div>
     </main>
   );

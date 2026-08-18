@@ -15,33 +15,33 @@ const channelBadgeStyles: Record<
   { bg: string; text: string; icon: React.ReactNode }
 > = {
   UPI: {
-    bg: "bg-purple-100",
-    text: "text-purple-700",
+    bg: "bg-purple-900/30",
+    text: "text-purple-400",
     icon: <Smartphone size={12} />,
   },
   Card: {
-    bg: "bg-orange-100",
-    text: "text-orange-700",
+    bg: "bg-orange-900/30",
+    text: "text-orange-400",
     icon: <CreditCard size={12} />,
   },
   Netbanking: {
-    bg: "bg-blue-100",
-    text: "text-blue-700",
+    bg: "bg-blue-900/30",
+    text: "text-blue-400",
     icon: <Building2 size={12} />,
   },
   Wallet: {
-    bg: "bg-teal-100",
-    text: "text-teal-700",
+    bg: "bg-teal-900/30",
+    text: "text-teal-400",
     icon: <Wallet size={12} />,
   },
   online: {
-    bg: "bg-gray-100",
-    text: "text-gray-600",
+    bg: "bg-slate-800",
+    text: "text-slate-400",
     icon: <Globe size={12} />,
   },
   "in store": {
-    bg: "bg-yellow-100",
-    text: "text-yellow-700",
+    bg: "bg-yellow-900/30",
+    text: "text-yellow-400",
     icon: <Store size={12} />,
   },
 };
@@ -54,7 +54,7 @@ const TransactionsTable = ({
   if (transactions.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 py-12">
-        <p className="text-16 text-gray-500">No transactions found.</p>
+        <p className="text-16 text-slate-400">No transactions found.</p>
       </div>
     );
   }
@@ -63,20 +63,20 @@ const TransactionsTable = ({
     <div className="w-full overflow-x-auto">
       <table className="w-full">
         <thead>
-          <tr className="border-b border-gray-200">
-            <th className="px-4 py-3 text-left text-12 font-medium text-gray-500">
+          <tr className="border-b border-slate-700">
+            <th className="px-4 py-3 text-left text-12 font-medium text-slate-400">
               Transaction
             </th>
-            <th className="px-4 py-3 text-left text-12 font-medium text-gray-500">
+            <th className="px-4 py-3 text-left text-12 font-medium text-slate-400">
               Amount
             </th>
-            <th className="px-4 py-3 text-left text-12 font-medium text-gray-500">
+            <th className="px-4 py-3 text-left text-12 font-medium text-slate-400">
               Status
             </th>
-            <th className="px-4 py-3 text-left text-12 font-medium text-gray-500">
+            <th className="px-4 py-3 text-left text-12 font-medium text-slate-400">
               Date
             </th>
-            <th className="px-4 py-3 text-left text-12 font-medium text-gray-500">
+            <th className="px-4 py-3 text-left text-12 font-medium text-slate-400">
               Category
             </th>
           </tr>
@@ -95,11 +95,11 @@ const TransactionsTable = ({
             return (
               <tr
                 key={tx.id}
-                className="border-b border-white/20 hover:bg-white/40 transition-colors"
+                className="border-b border-slate-700/50 hover:bg-slate-800/40 transition-colors"
               >
                 <td className="px-4 py-3">
                   <div className="flex flex-col">
-                    <p className="text-14 font-semibold text-gray-900">
+                    <p className="text-14 font-semibold text-slate-200">
                       {tx.name}
                     </p>
                     <span
@@ -117,8 +117,8 @@ const TransactionsTable = ({
                 <td className="px-4 py-3">
                   <p
                     className={cn("text-14 font-semibold", {
-                      "text-red-600": isDebit,
-                      "text-green-600": !isDebit,
+                      "text-red-400": isDebit,
+                      "text-emerald-400": !isDebit,
                     })}
                   >
                     {isDebit ? "-" : "+"}
@@ -130,8 +130,8 @@ const TransactionsTable = ({
                     className={cn(
                       "inline-flex items-center rounded-full px-2 py-1 text-12 font-medium",
                       {
-                        "bg-yellow-100 text-yellow-800": tx.pending,
-                        "bg-green-100 text-green-800": !tx.pending,
+                        "bg-yellow-900/30 text-yellow-400": tx.pending,
+                        "bg-green-900/30 text-green-400": !tx.pending,
                       },
                     )}
                   >
@@ -139,7 +139,7 @@ const TransactionsTable = ({
                   </span>
                 </td>
                 <td className="px-4 py-3">
-                  <p className="text-14 text-gray-600">
+                  <p className="text-14 text-slate-400">
                     {formatDateTime(new Date(tx.date)).dateOnly}
                   </p>
                 </td>

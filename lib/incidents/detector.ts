@@ -125,6 +125,48 @@ export class IncidentDetector {
   /**
    * Seed dummy incidents for operational visualization if store is empty.
    */
+  /**
+   * Manually create an incident from log ingestion or external triggers.
+   */
+  static createIncident(data: {
+    title: string;
+    severity: IncidentSeverity;
+    provider: string;
+    affectedTransactionCount: number;
+    totalAffectedAmount: number;
+    mismatchTypes: string[];
+    reconciliationItemIds: string[];
+  }): PaymentIncident {
+    const now = new Date().toISOString();
+    const incident: PaymentIncident = {
+      id: `inc_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      title: data.title,
+      severity: data.severity,
+      status: "ACTION_REQUIRED",
+      provider: data.provider,
+      affectedTransactionCount: data.affectedTransactionCount,
+      totalAffectedAmount: data.totalAffectedAmount,
+      mismatchTypes: data.mismatchTypes,
+      reconciliationItemIds: data.reconciliationItemIds,
+      detectedAt: now,
+      resolvedAt: null,
+      resolution: null,
+      timeline: [
+        {
+          timestamp: now,
+          event: "DETECTED",
+          detail: `Ingestion policy: ${data.title}`,
+        },
+      ],
+    };
+
+    const result = IncidentCorrelator.correlate(incident, incidents);
+    if (!result.wasMerged) {
+      incidents.push(incident);
+      pruneIncidents();
+    }
+    return result.incident;
+  }
   static seedDummyIncidents(): void {
     if (incidents.length > 0) return;
 
@@ -177,8 +219,8 @@ export class IncidentDetector {
         severity: "HIGH",
         status: "INVESTIGATING",
         provider: "dwolla",
-        paymentMethod: "ach",
-        bank: "Chase Bank",
+        paymentMethod: "imps_neft",
+        bank: "HDFC Bank",
         affectedTransactionCount: 4,
         totalAffectedAmount: 1250000,
         mismatchTypes: ["FAILURE_RATE_SPIKE"],
@@ -191,7 +233,7 @@ export class IncidentDetector {
             timestamp: min35,
             event: "DETECTED",
             detail:
-              "High ACH return rate (28%) detected on Chase routing #122000218.",
+              "High UPI return rate (28%) detected on HDFC Bank IFSC HDFC0000123.",
           },
           {
             timestamp: min35,
@@ -489,7 +531,8 @@ export class IncidentDetector {
     const failedCount = hasRealTxs
       ? transactions.filter((t) => t.paymentState === "FAILED").length
       : 6;
-    const successRate = totalTransactions > 0 ? successCount / totalTransactions : 0.958;
+    const successRate =
+      totalTransactions > 0 ? successCount / totalTransactions : 0.958;
     const totalVolume = hasRealTxs
       ? transactions.reduce((sum, t) => sum + t.amount, 0)
       : 124580000;

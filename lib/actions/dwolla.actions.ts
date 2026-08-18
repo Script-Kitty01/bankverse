@@ -24,7 +24,7 @@ export const createDwollaCustomer = async () => {
       state: user.state,
       postalCode: user.postalCode,
       dateOfBirth: user.dateOfBirth,
-      ssn: user.ssn,
+      pan: user.pan,
     };
 
     const response = await dwollaClient.post("customers", requestBody);
@@ -111,7 +111,7 @@ export const createTransfer = async (params: {
         },
       },
       amount: {
-        currency: "USD",
+        currency: "INR",
         value: params.amount.toFixed(2),
       },
       metadata: {

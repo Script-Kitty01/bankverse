@@ -59,7 +59,7 @@ interface WebhookEventRecord {
   payloadHash: string;
 }
 
-// In-memory store for demo mode; use Appwrite in production
+// In-memory store for demo mode; persistent database store in production
 const webhookEventStore = new Map<string, WebhookEventRecord>();
 
 // ─── Bounded Store (SRE hardening) ───────────────────────────────
@@ -191,9 +191,14 @@ export async function POST(request: Request) {
     sweepWebhookEventStore();
 
     // ── Idempotency Check ───────────────────────────────────────
+    const bodyHash = hashPayload(body).slice(0, 16);
+    const entityId =
+      webhookPayload?.payment?.entity?.id ||
+      webhookPayload?.order?.entity?.id;
+
     const eventId =
       request.headers.get("x-razorpay-event-id") ||
-      `${event}_${webhookPayload?.payment?.entity?.id || webhookPayload?.order?.entity?.id || Date.now()}_${Date.now()}`;
+      (entityId ? `${event}_${entityId}` : `evt_${event}_${bodyHash}`);
 
     const existingEvent = webhookEventStore.get(eventId);
     if (existingEvent && existingEvent.status === "PROCESSED") {
