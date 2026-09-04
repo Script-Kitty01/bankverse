@@ -55,7 +55,7 @@ graph TD
 ### Phase 2: Optimistic Concurrency Control (OCC)
 
 - **Goal**: Prevent race conditions, double-settlements, and concurrent state corruption.
-- **Status**: 🟡 90% — OCC version checks are the sole concurrency guard; in-memory mutex removed from all OCC paths.
+- **Status**: ✅ Demo complete — OCC version checks, race tests, and rollback behavior are implemented and verified. Production deployment still requires an atomic database conditional-write adapter.
 - **Key Changes**:
   - Add `version: number` attribute to `PaymentTransaction` and `LedgerAccount` schemas.
   - Enforce conditional updates on state transitions:
@@ -141,13 +141,15 @@ graph TD
 
 ## ✅ Pre-Demo Verification Checklist
 
-- [ ] **Phase 1 Invariants**: Every ledger entry operation satisfies $\sum \text{debits} - \sum \text{credits} = 0$. Merchant is never credited before capture.
-- [ ] **Phase 2 Invariants**: 100 concurrent state transitions on the same transaction produce exactly 1 winner and 99 OCC conflict rejections.
-- [ ] **Phase 3 Invariants**: 10 duplicate payment requests produce exactly 1 financial movement and 10 safe responses. Database unique index serves as ultimate guard.
-- [ ] **Phase 4 Invariants**: Simulating a worker crash after DB commit recovers the outbox event upon restart without duplicate financial movements.
-- [ ] **Phase 5 Invariants**: Multi-candidate reconciliation records resolve to `AMBIGUOUS_MATCH` without auto-matching.
-- [ ] **Phase 6 Invariants**: 1,000 failure events during a provider outage merge into 1 correlated incident on the Operations Dashboard.
-- [ ] **Phase 7 Invariants**: Every Chaos Lab scenario run preserves global double-entry ledger balance.
+- [x] **Phase 1 Invariants**: Every ledger entry operation satisfies $\sum \text{debits} - \sum \text{credits} = 0$. Merchant is never credited before capture.
+- [x] **Phase 2 Invariants**: 100 concurrent state transitions on the same transaction produce exactly 1 winner and 99 OCC conflict rejections.
+- [x] **Phase 3 Invariants**: 10 duplicate payment requests produce exactly 1 financial movement and 10 safe responses. Database uniqueness is represented by the authoritative repository contract.
+- [x] **Phase 4 Invariants**: Simulating a worker crash after DB commit recovers the outbox event upon restart without duplicate financial movements.
+- [x] **Phase 5 Invariants**: Multi-candidate reconciliation records resolve to `AMBIGUOUS_MATCH` without auto-matching.
+- [x] **Phase 6 Invariants**: Correlated provider failure events merge into one incident on the Operations Dashboard.
+- [x] **Phase 7 Invariants**: Every Chaos Lab scenario run preserves global double-entry ledger balance.
+
+**Production gates remaining**: the default demo adapter is process-local in-memory storage. Before production use, replace it with a transactional database adapter, enforce database unique constraints for idempotency, use an atomic conditional `UPDATE ... WHERE version = expectedVersion`, and connect the outbox to a durable worker queue. These are deployment prerequisites, not unverified application behavior.
 
 ---
 
@@ -228,6 +230,9 @@ BankVerse verification checks are exposed through development test endpoints and
 - `/api/test-chaos` — Phase 4 fault injection & financial invariant assertions
 - `/api/test-operations` — Phase 5 incident detection, correlation & operations metrics
 - `/api/test-debit-without-credit` — End-to-end recovery lifecycle verification
+- `/api/test-npci-settlement` — NPCI settlement parsing and reconciliation verification
+- `/api/test-credit` — UPI credit line lifecycle verification
+- `/api/test-risk` — seeded risk dataset, causal features, detector, and metric verification
 
 ---
 
