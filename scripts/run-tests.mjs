@@ -49,6 +49,11 @@ const ENDPOINTS = [
     file: "./app/api/test-normalized-ingest/route.ts",
   },
   {
+    name: "Phase 8: AI Risk Manager Fraud Detection",
+    path: "/api/test-risk",
+    file: "./app/api/test-risk/route.ts",
+  },
+  {
     name: "E2E: DEBIT_WITHOUT_MERCHANT_SETTLEMENT Recovery Lifecycle",
     path: "/api/test-debit-without-credit",
     file: "./app/api/test-debit-without-credit/route.ts",

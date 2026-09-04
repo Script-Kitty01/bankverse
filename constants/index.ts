@@ -39,6 +39,11 @@ export const sidebarLinks = [
     route: "/logs",
     label: "Transaction Logs",
   },
+  {
+    imgURL: "/icons/monitor.svg",
+    route: "/risk-center",
+    label: "Risk Center",
+  },
 ];
 
 // good_user / good_password - HDFC Bank

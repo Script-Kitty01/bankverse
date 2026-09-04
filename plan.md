@@ -221,6 +221,7 @@ graph TD
 ## 🛠️ Verification & Testing Strategy
 
 BankVerse verification checks are exposed through development test endpoints and a CLI runner (`npm test`):
+
 - `/api/test-ledger` — Phase 1 double-entry ledger & balance assertions
 - `/api/test-payment` — Phase 2 dual-dimension state machine & 100 concurrent OCC race test
 - `/api/test-reconciliation` — Phase 3 internal/external matching & ambiguity detection
@@ -228,3 +229,57 @@ BankVerse verification checks are exposed through development test endpoints and
 - `/api/test-operations` — Phase 5 incident detection, correlation & operations metrics
 - `/api/test-debit-without-credit` — End-to-end recovery lifecycle verification
 
+---
+
+## AI Risk Manager Hackathon Track
+
+### Goal
+
+Add a defense-only fraud-spike detector that helps merchants reduce fraud loss without claiming that synthetic evaluation equals production performance. The detector will produce reproducible precision, recall, F1, false-positive rate, and expected rupee cost on a held-out test set.
+
+### Phase 1: Risk Data Foundation
+
+- Add `lib/risk/types.ts` for transactions, feature vectors, risk scores, labels, and evaluation reports.
+- Add `lib/risk/dataset.ts` with a seeded generator for India-realistic UPI transactions and four labeled patterns: card-testing bursts, coordinated velocity rings, night high-value anomalies, and refund abuse.
+- Add a stratified 70/30 train/test split with deterministic output and no label leakage.
+- Verify generator determinism, class counts, split integrity, and valid timestamps/amounts.
+
+### Phase 2: Feature Engineering
+
+- Add `lib/risk/features.ts` for causal sliding-window velocity, merchant novelty, night activity, amount deviation, refund ratio, and device sharing features.
+- Ensure each feature only uses transactions earlier than the transaction being scored.
+- Verify feature calculations against small hand-built fixtures.
+
+### Phase 3: Explainable Detector
+
+- Add pure TypeScript logistic regression with L2 regularization and inspectable weights.
+- Add explicit defense-only rules for card-testing bursts, velocity caps, and night high-value activity.
+- Combine model probability and rules into an explained `ALLOW`, `REVIEW`, or `BLOCK` score.
+
+### Phase 4: Honest Evaluation
+
+- Add confusion matrices, precision, recall, F1, false-positive rate, PR curve points, and threshold evaluation.
+- Add a configurable cost model: false negatives use estimated fraud exposure; false positives use manual review and customer-friction cost.
+- Select and display the cost-optimal threshold without hiding the tradeoff.
+
+### Phase 5: Abuse-Ring Detection
+
+- Group shared-device and coordinated merchant activity into explainable fraud-ring records.
+- Include members, merchants, timeline, and exposure, without exposing or generating offensive capabilities.
+
+### Phase 6: Risk APIs and Verification
+
+- Add `/api/risk/evaluate`, `/api/risk/score`, `/api/risk/rings`, `/api/risk/threshold`, and `/api/test-risk`.
+- Extend `scripts/run-tests.mjs` with the risk verification phase.
+- The verification endpoint must assert seeded reproducibility, split integrity, metric calculation, and configured quality bars.
+
+### Phase 7: Risk Command Center
+
+- Add a `/risk-center` page with evaluation metrics, confusion matrix, threshold/cost tuning, live explained scoring, and abuse-ring timelines.
+- Add the page to the desktop and mobile navigation using existing UI conventions.
+
+### Phase 8: Documentation and Release
+
+- Add a hackathon pitch document with data-generation disclosure, exact measured metrics, false-positive cost assumptions, limitations, and defense-only scope.
+- Run the focused risk checks after every phase, then `npm test`, `npm run lint`, and `npm run build`.
+- Commit the completed work and push the current branch to the configured `origin` remote only after all checks pass.
