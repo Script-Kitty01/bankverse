@@ -62,7 +62,8 @@ export function extractFeatures(
     txnsLastHour: recent.length,
     distinctMerchantsLast24h: new Set(dayHistory.map((item) => item.merchantId))
       .size,
-    amountDeviation: Math.abs(current.amount - average) / Math.max(1, Math.sqrt(variance)),
+    amountDeviation:
+      Math.abs(current.amount - average) / Math.max(1, Math.sqrt(variance)),
     lowAmountBurst: burst.length >= 3 && current.amount <= 50 ? 1 : 0,
     nightHour: hour >= 2 && hour <= 5 ? 1 : 0,
     newMerchant: customerMerchants.has(current.merchantId) ? 0 : 1,
@@ -82,15 +83,34 @@ export function extractFeatures(
 
 export function buildFeatureRows(
   transactions: RiskTransaction[],
+  priorHistory: RiskTransaction[] = [],
 ): Array<{ transaction: RiskTransaction; features: RiskFeatureVector }> {
   const ordered = [...transactions].sort((left, right) =>
     left.timestamp.localeCompare(right.timestamp),
   );
-  return ordered.map((transaction) => ({
+  const history = [...priorHistory].sort((left, right) =>
+    left.timestamp.localeCompare(right.timestamp),
+  );
+
+  const recentHistory = (timestamp: string, currentIndex: number) => {
+    const candidates = [...history, ...ordered.slice(0, currentIndex)].sort(
+      (left, right) => left.timestamp.localeCompare(right.timestamp),
+    );
+    let low = 0;
+    let high = candidates.length;
+    while (low < high) {
+      const middle = Math.floor((low + high) / 2);
+      if (candidates[middle].timestamp < timestamp) low = middle + 1;
+      else high = middle;
+    }
+    return candidates.slice(Math.max(0, low - 200), low);
+  };
+
+  return ordered.map((transaction, index) => ({
     transaction,
     features: extractFeatures(
       transaction,
-      ordered.slice(Math.max(0, ordered.indexOf(transaction) - 200), ordered.indexOf(transaction) + 1),
+      recentHistory(transaction.timestamp, index),
     ),
   }));
 }

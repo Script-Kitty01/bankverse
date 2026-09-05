@@ -10,8 +10,10 @@ import { PaymentStateMachine } from "@/lib/payment/state-machine";
 import { MockPaymentProvider } from "@/lib/payment/mock.provider";
 import {
   updatePaymentTransactionState,
+  getPaymentTransactionByIdempotencyKey,
   verifyLedgerIntegrity,
 } from "@/lib/ledger/ledger.service";
+import type { RiskTransaction } from "@/lib/risk/types";
 
 interface TestResult {
   name: string;
@@ -266,7 +268,64 @@ export async function GET() {
     });
   }
 
-  // ─── Test 8: Orchestrator — refund flow ───────────────────────
+  // ─── Test 8: Risk gate blocks before provider or ledger movement ──
+  try {
+    const riskNow = Date.now();
+    const riskHistory: RiskTransaction[] = Array.from(
+      { length: 12 },
+      (_, index) => ({
+        id: `risk-gate-history-${runId}-${index}`,
+        customerId: `risk-customer-${index}`,
+        payerVpa: `risk${index}@bank`,
+        merchantId: `risk-merchant-${runId}`,
+        bank: "TESTBANK",
+        deviceId: `risk-shared-device-${runId}`,
+        amount: 20,
+        currency: "INR",
+        timestamp: new Date(riskNow - (12 - index) * 60 * 1000).toISOString(),
+        status: "SUCCESS",
+        isFraud: false,
+        fraudPattern: "LEGITIMATE",
+      }),
+    );
+    const orchestrator = new PaymentOrchestrator({
+      maxRetries: 1,
+      retryDelayMs: 10,
+      riskEnabled: true,
+    });
+    const idempotencyKey = `risk-block-${runId}`;
+    const blocked = await orchestrator.processPayment({
+      customerId: `risk-live-customer-${runId}`,
+      merchantId: `risk-merchant-${runId}`,
+      amount: 20,
+      currency: "INR",
+      method: "upi",
+      idempotencyKey,
+      riskContext: { deviceId: `risk-shared-device-${runId}` },
+      riskHistory,
+    });
+    const transaction =
+      await getPaymentTransactionByIdempotencyKey(idempotencyKey);
+    const passed =
+      !blocked.success && blocked.risk?.decision === "BLOCK" && !transaction;
+
+    results.push({
+      name: "Risk gate — block before provider or ledger movement",
+      passed,
+      details: passed
+        ? "Coordinated burst was blocked before a payment transaction was created"
+        : `Expected BLOCK with no transaction, got ${blocked.risk?.decision ?? "none"}`,
+    });
+  } catch (e: any) {
+    results.push({
+      name: "Risk gate — block before provider or ledger movement",
+      passed: false,
+      details: "Threw unexpected error",
+      error: e.message,
+    });
+  }
+
+  // ─── Test 9: Orchestrator — refund flow ───────────────────────
   try {
     const orchestrator = new PaymentOrchestrator({
       maxRetries: 1,
@@ -349,9 +408,8 @@ export async function GET() {
     const fulfilled = raceResults.filter((r) => r.status === "fulfilled");
     const rejected = raceResults.filter((r) => r.status === "rejected");
 
-    const { getPaymentTransactionById } = await import(
-      "@/lib/ledger/ledger.service"
-    );
+    const { getPaymentTransactionById } =
+      await import("@/lib/ledger/ledger.service");
     const finalTx = await getPaymentTransactionById(txId);
     const expectedFinalVersion = initialVersion + 1;
 
@@ -401,18 +459,15 @@ export async function GET() {
     const successful = raceResults.filter((r) => r.success);
     const txIds = new Set(successful.map((r) => r.transaction?.id));
 
-    const { getLedgerEntriesByTransaction } = await import(
-      "@/lib/ledger/ledger.service"
-    );
+    const { getLedgerEntriesByTransaction } =
+      await import("@/lib/ledger/ledger.service");
     const entries = await getLedgerEntriesByTransaction(
       Array.from(txIds)[0] || "",
     );
 
     // Exactly 2 pairs of ledger entries: Customer -> Clearing (2) + Clearing -> Merchant (2) = 4 entries total
     const passed =
-      successful.length === 100 &&
-      txIds.size === 1 &&
-      entries.length === 4;
+      successful.length === 100 && txIds.size === 1 && entries.length === 4;
 
     results.push({
       name: "OCC & Idempotency — 100 concurrent payment calls",
@@ -612,8 +667,16 @@ export async function GET() {
     const { IdempotencyManager } = await import("@/lib/security/idempotency");
 
     const idempotencyKey = `idem-hash-test-${runId}`;
-    const initialParams = { customerId: "cust_1", amount: 1000, currency: "INR" };
-    const alteredParams = { customerId: "cust_1", amount: 9000, currency: "INR" };
+    const initialParams = {
+      customerId: "cust_1",
+      amount: 1000,
+      currency: "INR",
+    };
+    const alteredParams = {
+      customerId: "cust_1",
+      amount: 9000,
+      currency: "INR",
+    };
 
     const mockTx = {
       id: "ptx_mock_1",
@@ -675,12 +738,10 @@ export async function GET() {
 
   // ─── Test 14: Unified Webhook Ingestion & Deduplication ────────
   try {
-    const { POST: webhookPOST } = await import(
-      "@/app/api/webhooks/payment-provider/route"
-    );
-    const { recordTransaction, getPaymentTransactionById } = await import(
-      "@/lib/ledger/ledger.service"
-    );
+    const { POST: webhookPOST } =
+      await import("@/app/api/webhooks/payment-provider/route");
+    const { recordTransaction, getPaymentTransactionById } =
+      await import("@/lib/ledger/ledger.service");
 
     const webhookOrderRef = `wh_ord_${runId}`;
     const ledgerResult = await recordTransaction({

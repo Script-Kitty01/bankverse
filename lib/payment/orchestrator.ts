@@ -28,6 +28,8 @@ import {
 } from "@/lib/ledger/ledger.service";
 import { IdempotencyManager } from "@/lib/security/idempotency";
 import type { PaymentTransaction } from "@/lib/ledger/types";
+import { evaluatePaymentRisk } from "@/lib/risk/payment-gate";
+import type { RiskTransaction } from "@/lib/risk/types";
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -39,6 +41,12 @@ export interface PaymentRequest {
   method: "upi" | "card" | "netbanking" | "wallet";
   description?: string;
   idempotencyKey?: string;
+  riskContext?: {
+    deviceId?: string;
+    payerVpa?: string;
+    bank?: string;
+  };
+  riskHistory?: RiskTransaction[];
 }
 
 export interface PaymentResult {
@@ -48,6 +56,11 @@ export interface PaymentResult {
   paymentId?: string;
   error?: string;
   retryCount?: number;
+  risk?: {
+    decision: "ALLOW" | "REVIEW" | "BLOCK";
+    riskScore: number;
+    reasons: string[];
+  };
 }
 
 export interface RefundRequest {
@@ -66,6 +79,7 @@ export interface OrchestratorConfig {
   maxRetries: number;
   retryDelayMs: number;
   retryBackoffMultiplier: number;
+  riskEnabled: boolean;
 }
 
 // ─── Default Config ─────────────────────────────────────────────
@@ -74,6 +88,7 @@ const DEFAULT_CONFIG: OrchestratorConfig = {
   maxRetries: 3,
   retryDelayMs: 1000,
   retryBackoffMultiplier: 2,
+  riskEnabled: false,
 };
 
 // ─── Orchestrator ───────────────────────────────────────────────
@@ -85,7 +100,12 @@ export class PaymentOrchestrator {
   constructor(
     config?: Partial<OrchestratorConfig> & { provider?: PaymentProvider },
   ) {
-    this.config = { ...DEFAULT_CONFIG, ...config };
+    this.config = {
+      ...DEFAULT_CONFIG,
+      ...config,
+      riskEnabled:
+        config?.riskEnabled ?? process.env.BANKVERSE_RISK_GUARD === "true",
+    };
     this.provider = config?.provider ?? this.resolveProvider();
   }
 
@@ -141,6 +161,28 @@ export class PaymentOrchestrator {
             ? `Payment already exists in state: ${existing.paymentState}`
             : undefined,
       };
+    }
+
+    if (this.config.riskEnabled) {
+      const risk = evaluatePaymentRisk({
+        customerId: request.customerId,
+        merchantId: request.merchantId,
+        amount: request.amount,
+        currency: request.currency,
+        context: request.riskContext,
+        history: request.riskHistory,
+      });
+      if (risk.decision !== "ALLOW") {
+        return {
+          success: false,
+          error: `Payment held by risk policy: ${risk.decision}`,
+          risk: {
+            decision: risk.decision,
+            riskScore: risk.riskScore,
+            reasons: risk.triggeredRules,
+          },
+        };
+      }
     }
 
     // Step 1: Create order via provider
@@ -357,7 +399,9 @@ export class PaymentOrchestrator {
     // refunds from interleaving state transitions and causing double-refunds.
     const { runWithEntityLock } = await import("@/lib/ledger/repository");
     return runWithEntityLock(`refund:${request.transactionId}`, async () => {
-      const transaction = await getPaymentTransactionById(request.transactionId);
+      const transaction = await getPaymentTransactionById(
+        request.transactionId,
+      );
       if (!transaction) {
         return { success: false, error: "Transaction not found" };
       }
@@ -394,7 +438,8 @@ export class PaymentOrchestrator {
 
       // Process refund via provider FIRST (money movement is source of truth)
       const refundResult = await this.provider.refundPayment({
-        paymentId: transaction.providerPaymentId || transaction.providerReference,
+        paymentId:
+          transaction.providerPaymentId || transaction.providerReference,
         amount: request.amount,
         reason: request.reason,
       });

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { generateDataset, stratifiedSplit } from "@/lib/risk/dataset";
 import { extractFeatures } from "@/lib/risk/features";
 import { evaluateThreshold, trainDetector } from "@/lib/risk/metrics";
+import { detectRings } from "@/lib/risk/rings";
 
 export async function GET() {
   const first = generateDataset();
@@ -14,14 +15,12 @@ export async function GET() {
       new Set(split.test.map((item) => item.id)).size ===
     first.length;
   const fraudCount = first.filter((item) => item.isFraud).length;
-  const sampledTrain = [...split.train.filter((item) => item.isFraud), ...split.train.filter((item) => !item.isFraud).slice(0, 1800)];
-  const sampledTest = [...split.test.filter((item) => item.isFraud), ...split.test.filter((item) => !item.isFraud).slice(0, 900)];
   const reference = first[500];
   const causalBefore = extractFeatures(reference, first.slice(0, 500));
   const causalAfter = extractFeatures(reference, first);
   const noFutureLeakage =
     JSON.stringify(causalBefore) === JSON.stringify(causalAfter);
-  const detector = trainDetector(sampledTrain, 0, 0.8);
+  const detector = trainDetector(split.train, 0, 0.8);
   const suspicious = first.find(
     (item) => item.fraudPattern === "CARD_TESTING",
   )!;
@@ -34,7 +33,32 @@ export async function GET() {
     amount: 10,
   }));
   const score = detector.score(suspicious, burstHistory);
-  const evaluation = evaluateThreshold(trainDetector(sampledTrain), sampledTest, 0.5);
+  const evaluation = evaluateThreshold(
+    trainDetector(split.train),
+    split.test,
+    0.5,
+    undefined,
+    split.train,
+  );
+  const ringFixture = Array.from({ length: 3 }, (_, index) => ({
+    ...reference,
+    id: `ring_fixture_${index}`,
+    customerId: `ring_customer_${index}`,
+    deviceId: "shared_ring_device",
+    timestamp: new Date(
+      Date.parse(reference.timestamp) + index * 10 * 60 * 1000,
+    ).toISOString(),
+    isFraud: index === 0,
+  }));
+  const relabeledRingFixture = ringFixture.map((item) => ({
+    ...item,
+    isFraud: false,
+    fraudPattern: "LEGITIMATE" as const,
+  }));
+  const ringsWithLabels = detectRings(ringFixture);
+  const ringsWithoutLabels = detectRings(relabeledRingFixture);
+  const labelIndependentRings =
+    JSON.stringify(ringsWithLabels) === JSON.stringify(ringsWithoutLabels);
   const explainableScore =
     score.decision !== "ALLOW" &&
     score.triggeredRules.length > 0 &&
@@ -43,9 +67,10 @@ export async function GET() {
     sameSeedIsDeterministic &&
     noOverlap &&
     noFutureLeakage &&
+    labelIndependentRings &&
     explainableScore &&
     evaluation.truePositive + evaluation.falseNegative ===
-      sampledTest.filter((item) => item.isFraud).length &&
+      split.test.filter((item) => item.isFraud).length &&
     fraudCount === 360 &&
     split.train.length + split.test.length === first.length;
 
@@ -57,6 +82,7 @@ export async function GET() {
         sameSeedIsDeterministic,
         noOverlap,
         noFutureLeakage,
+        labelIndependentRings,
         explainableScore,
         decision: score.decision,
         modelProbability: score.modelProbability,
@@ -65,6 +91,7 @@ export async function GET() {
         metricsComputed: evaluation.expectedCostInr >= 0,
         fraudCount,
         total: first.length,
+        evaluatedTestCount: split.test.length,
       },
       split: { train: split.train.length, test: split.test.length },
     },

@@ -288,3 +288,14 @@ Add a defense-only fraud-spike detector that helps merchants reduce fraud loss w
 - Add a hackathon pitch document with data-generation disclosure, exact measured metrics, false-positive cost assumptions, limitations, and defense-only scope.
 - Run the focused risk checks after every phase, then `npm test`, `npm run lint`, and `npm run build`.
 - Commit the completed work and push the current branch to the configured `origin` remote only after all checks pass.
+
+### Implementation Status: Sentinel Hardening
+
+- [x] Risk features use bounded, strictly prior chronological context for training and held-out evaluation.
+- [x] Risk APIs evaluate the complete declared held-out split and preserve dataset/split provenance.
+- [x] Abuse-ring candidates use observable shared-device activity and evidence; synthetic labels are evaluation-only.
+- [x] An opt-in deterministic payment risk gate runs after idempotency lookup and before provider order creation.
+- [x] `REVIEW` and `BLOCK` return structured risk evidence without creating provider or ledger movement.
+- [x] Coordinated-burst verification proves the gate blocks before a payment transaction is created.
+- [x] Risk pitch and Risk Center disclose synthetic evaluation and show observable ring evidence.
+- [ ] Production wiring still requires durable risk-audit storage and a trusted source of live prior-transaction/device history.
