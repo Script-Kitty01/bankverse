@@ -1,0 +1,4 @@
+datasets
+huggingface-hub
+numpy
+pandas

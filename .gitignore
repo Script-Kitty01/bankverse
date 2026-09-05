@@ -37,9 +37,27 @@ dev-server-err.log
 # env files (can opt-in for committing if needed)
 .env*
 
+# local/CI dataset artifacts
+/data/raw/
+/data/generated/
+/data/manifests/
+/data/public_envelopes.csv
+/data/failure_priors.json
+/data/public_manifest.json
+/data/ml_dataset.csv
+/data/dataset_manifest.json
+
 # vercel
 .vercel
 
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+.venv/
+venv/

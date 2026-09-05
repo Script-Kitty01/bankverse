@@ -1,0 +1,34 @@
+groups:
+  - name: bankverse-reliability
+    rules:
+      - alert: BankVerseProviderFailureSpike
+        expr: sum by (provider) (rate(bankverse_provider_attempts_total{outcome=~"failure|timeout|declined"}[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Provider failure rate is elevated
+
+      - alert: BankVerseMLFallbackSpike
+        expr: sum(rate(bankverse_ml_fallbacks_total[5m])) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: ML routing is falling back frequently
+
+      - alert: BankVerseCircuitBreakerOpen
+        expr: bankverse_circuit_breaker_open > 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: BankVerse ML circuit breaker is open
+
+      - alert: BankVerseLedgerInvariantViolation
+        expr: bankverse_ledger_invariant_violations_total > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: A ledger invariant violation was observed

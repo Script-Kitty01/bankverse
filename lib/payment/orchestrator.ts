@@ -30,6 +30,11 @@ import { IdempotencyManager } from "@/lib/security/idempotency";
 import type { PaymentTransaction } from "@/lib/ledger/types";
 import { evaluatePaymentRisk } from "@/lib/risk/payment-gate";
 import type { RiskTransaction } from "@/lib/risk/types";
+import {
+  emitBankEvent,
+  type BankEvent,
+  type BankEventOutcome,
+} from "@/lib/telemetry/events";
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -127,6 +132,36 @@ export class PaymentOrchestrator {
     return this.provider;
   }
 
+  private emitPaymentEvent(params: {
+    eventType: BankEvent["eventType"];
+    transactionId?: string;
+    amount?: number;
+    currency?: string;
+    attempt?: number;
+    latencyMs?: number;
+    outcome?: BankEventOutcome;
+    error?: string;
+    metadata?: Record<string, unknown>;
+  }): BankEvent {
+    const event: BankEvent = {
+      id: `bank_evt_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+      schemaVersion: "1.0.0",
+      eventType: params.eventType,
+      timestamp: new Date().toISOString(),
+      transactionId: params.transactionId,
+      provider: this.provider.config.name,
+      amount: params.amount,
+      currency: params.currency,
+      attempt: params.attempt,
+      latencyMs: params.latencyMs,
+      outcome: params.outcome,
+      error: params.error,
+      metadata: params.metadata,
+    };
+
+    return emitBankEvent(event);
+  }
+
   // ─── Process Payment (Full Flow) ──────────────────────────────
   //
   // NEW FLOW (ledger AFTER provider confirmation):
@@ -147,10 +182,41 @@ export class PaymentOrchestrator {
       request.idempotencyKey ||
       `pay_${request.customerId}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
+    this.emitPaymentEvent({
+      eventType: "PAYMENT_CREATED",
+      amount: request.amount,
+      currency: request.currency,
+      metadata: {
+        customerId: request.customerId,
+        merchantId: request.merchantId,
+        method: request.method,
+        idempotencyKey,
+      },
+      outcome: "SUCCESS",
+    });
+
     // Idempotency check
     const existing =
       await getPaymentTransactionByIdempotencyKey(idempotencyKey);
     if (existing) {
+      this.emitPaymentEvent({
+        eventType: "PAYMENT_FAILED",
+        amount: request.amount,
+        currency: request.currency,
+        metadata: {
+          customerId: request.customerId,
+          merchantId: request.merchantId,
+          idempotencyKey,
+          duplicate: true,
+          existingState: existing.paymentState,
+        },
+        outcome: "DECLINED",
+        error:
+          existing.paymentState !== "SUCCESS"
+            ? `Payment already exists in state: ${existing.paymentState}`
+            : undefined,
+      });
+
       return {
         success: existing.paymentState === "SUCCESS",
         transaction: existing,
@@ -173,6 +239,22 @@ export class PaymentOrchestrator {
         history: request.riskHistory,
       });
       if (risk.decision !== "ALLOW") {
+        this.emitPaymentEvent({
+          eventType: "PAYMENT_FAILED",
+          amount: request.amount,
+          currency: request.currency,
+          metadata: {
+            customerId: request.customerId,
+            merchantId: request.merchantId,
+            idempotencyKey,
+            riskDecision: risk.decision,
+            riskScore: risk.riskScore,
+            reasons: risk.triggeredRules,
+          },
+          outcome: "DECLINED",
+          error: `Payment held by risk policy: ${risk.decision}`,
+        });
+
         return {
           success: false,
           error: `Payment held by risk policy: ${risk.decision}`,
@@ -198,11 +280,38 @@ export class PaymentOrchestrator {
     });
 
     if (!orderResult.success || !orderResult.orderId) {
+      this.emitPaymentEvent({
+        eventType: "PAYMENT_FAILED",
+        amount: request.amount,
+        currency: request.currency,
+        metadata: {
+          customerId: request.customerId,
+          merchantId: request.merchantId,
+          idempotencyKey,
+          orderCreated: false,
+        },
+        outcome: "FAILURE",
+        error: orderResult.error || "Order creation failed",
+      });
+
       return {
         success: false,
         error: orderResult.error || "Order creation failed",
       };
     }
+
+    this.emitPaymentEvent({
+      eventType: "PAYMENT_PROCESSING",
+      amount: request.amount,
+      currency: request.currency,
+      metadata: {
+        customerId: request.customerId,
+        merchantId: request.merchantId,
+        idempotencyKey,
+        orderId: orderResult.orderId,
+      },
+      outcome: "SUCCESS",
+    });
 
     // Step 2: Verify & capture with retries (NO ledger yet — money hasn't moved)
     const captureResult = await this.captureWithRetries(
@@ -242,6 +351,21 @@ export class PaymentOrchestrator {
 
       const finalTx = updatedTx || ledgerResult.transaction;
 
+      this.emitPaymentEvent({
+        eventType: "PAYMENT_SUCCESS",
+        transactionId: finalTx.id,
+        amount: request.amount,
+        currency: request.currency,
+        metadata: {
+          customerId: request.customerId,
+          merchantId: request.merchantId,
+          idempotencyKey,
+          orderId: orderResult.orderId,
+          paymentId: captureResult.paymentId,
+        },
+        outcome: "SUCCESS",
+      });
+
       // Cache result in Tier 1 (Redis) & Tier 2 (DB) Idempotency Layer
       await IdempotencyManager.cacheResult(idempotencyKey, {
         transaction: finalTx,
@@ -257,9 +381,40 @@ export class PaymentOrchestrator {
     }
 
     if (captureResult.unknown) {
+      this.emitPaymentEvent({
+        eventType: "PAYMENT_FAILED",
+        amount: request.amount,
+        currency: request.currency,
+        metadata: {
+          customerId: request.customerId,
+          merchantId: request.merchantId,
+          idempotencyKey,
+          orderId: orderResult.orderId,
+          retryCount: captureResult.retryCount,
+          resolvedAsUnknown: true,
+        },
+        outcome: "UNKNOWN",
+        error: captureResult.error,
+      });
+
       // Step 3b: UNKNOWN — query provider to resolve
       const statusResult = await this.provider.getPaymentStatus({
         orderId: orderResult.orderId,
+      });
+
+      this.emitPaymentEvent({
+        eventType: "PROVIDER_ATTEMPTED",
+        amount: request.amount,
+        currency: request.currency,
+        metadata: {
+          customerId: request.customerId,
+          merchantId: request.merchantId,
+          idempotencyKey,
+          orderId: orderResult.orderId,
+          phase: "status_check",
+        },
+        outcome: statusResult.success ? "SUCCESS" : "UNKNOWN",
+        error: statusResult.error,
       });
 
       if (statusResult.success && statusResult.status === "captured") {
@@ -290,6 +445,22 @@ export class PaymentOrchestrator {
           updatedTx?.version ?? ledgerResult.transaction.version,
         );
 
+        this.emitPaymentEvent({
+          eventType: "PAYMENT_SUCCESS",
+          transactionId: (updatedTx || ledgerResult.transaction).id,
+          amount: request.amount,
+          currency: request.currency,
+          metadata: {
+            customerId: request.customerId,
+            merchantId: request.merchantId,
+            idempotencyKey,
+            orderId: orderResult.orderId,
+            paymentId: statusResult.paymentId,
+            recoveredFromUnknown: true,
+          },
+          outcome: "SUCCESS",
+        });
+
         return {
           success: true,
           transaction: updatedTx || ledgerResult.transaction,
@@ -299,6 +470,22 @@ export class PaymentOrchestrator {
       }
 
       // Provider says not captured — no ledger, mark FAILED
+      this.emitPaymentEvent({
+        eventType: "PAYMENT_FAILED",
+        amount: request.amount,
+        currency: request.currency,
+        metadata: {
+          customerId: request.customerId,
+          merchantId: request.merchantId,
+          idempotencyKey,
+          orderId: orderResult.orderId,
+          status: statusResult.status,
+        },
+        outcome: "FAILURE",
+        error:
+          captureResult.error || "Payment not captured (resolved to FAILED)",
+      });
+
       return {
         success: false,
         orderId: orderResult.orderId,
@@ -309,6 +496,21 @@ export class PaymentOrchestrator {
     }
 
     // Step 3c: FAILED — no ledger entry (no money moved)
+    this.emitPaymentEvent({
+      eventType: "PAYMENT_FAILED",
+      amount: request.amount,
+      currency: request.currency,
+      metadata: {
+        customerId: request.customerId,
+        merchantId: request.merchantId,
+        idempotencyKey,
+        orderId: orderResult.orderId,
+        retryCount: captureResult.retryCount,
+      },
+      outcome: "FAILURE",
+      error: captureResult.error,
+    });
+
     return {
       success: false,
       orderId: orderResult.orderId,
@@ -335,6 +537,18 @@ export class PaymentOrchestrator {
       try {
         const mockPaymentId = `pay_${this.provider.config.name}_${Date.now()}`;
         const mockSignature = "demo_signature";
+        const startedAt = Date.now();
+
+        this.emitPaymentEvent({
+          eventType: "PROVIDER_ATTEMPTED",
+          amount: request.amount,
+          currency: request.currency,
+          attempt,
+          metadata: {
+            orderId,
+            operation: "verify_and_capture",
+          },
+        });
 
         const verifyResult = await this.provider.verifyPayment({
           orderId,
@@ -344,7 +558,35 @@ export class PaymentOrchestrator {
 
         if (!verifyResult.success) {
           lastError = verifyResult.error;
+          this.emitPaymentEvent({
+            eventType: "PROVIDER_FAILED",
+            amount: request.amount,
+            currency: request.currency,
+            attempt,
+            latencyMs: Date.now() - startedAt,
+            metadata: {
+              orderId,
+              operation: "verify",
+            },
+            outcome: "FAILURE",
+            error: verifyResult.error,
+          });
+
           if (attempt < this.config.maxRetries) {
+            this.emitPaymentEvent({
+              eventType: "RETRY_SCHEDULED",
+              amount: request.amount,
+              currency: request.currency,
+              attempt,
+              metadata: {
+                orderId,
+                nextAttempt: attempt + 1,
+                delayMs:
+                  this.config.retryDelayMs *
+                  Math.pow(this.config.retryBackoffMultiplier, attempt),
+              },
+              outcome: "SUCCESS",
+            });
             await this.delay(attempt);
             continue;
           }
@@ -363,6 +605,20 @@ export class PaymentOrchestrator {
         });
 
         if (captureResult.success) {
+          this.emitPaymentEvent({
+            eventType: "PROVIDER_SUCCESS",
+            amount: request.amount,
+            currency: request.currency,
+            attempt,
+            latencyMs: Date.now() - startedAt,
+            metadata: {
+              orderId,
+              operation: "capture",
+              paymentId: captureResult.paymentId || mockPaymentId,
+            },
+            outcome: "SUCCESS",
+          });
+
           return {
             success: true,
             unknown: false,
@@ -372,12 +628,70 @@ export class PaymentOrchestrator {
         }
 
         lastError = captureResult.error;
+        this.emitPaymentEvent({
+          eventType: "PROVIDER_FAILED",
+          amount: request.amount,
+          currency: request.currency,
+          attempt,
+          latencyMs: Date.now() - startedAt,
+          metadata: {
+            orderId,
+            operation: "capture",
+          },
+          outcome: captureResult.error?.toLowerCase().includes("timeout")
+            ? "TIMEOUT"
+            : "FAILURE",
+          error: captureResult.error,
+        });
+
         if (attempt < this.config.maxRetries) {
+          this.emitPaymentEvent({
+            eventType: "RETRY_SCHEDULED",
+            amount: request.amount,
+            currency: request.currency,
+            attempt,
+            metadata: {
+              orderId,
+              nextAttempt: attempt + 1,
+              delayMs:
+                this.config.retryDelayMs *
+                Math.pow(this.config.retryBackoffMultiplier, attempt),
+            },
+            outcome: "SUCCESS",
+          });
           await this.delay(attempt);
         }
       } catch (error: unknown) {
         lastError = (error as Error).message || "Unknown capture error";
+        this.emitPaymentEvent({
+          eventType: "PROVIDER_TIMEOUT",
+          amount: request.amount,
+          currency: request.currency,
+          attempt,
+          latencyMs: Date.now() - Date.now(),
+          metadata: {
+            orderId,
+            operation: "exception",
+          },
+          outcome: "TIMEOUT",
+          error: lastError,
+        });
+
         if (attempt < this.config.maxRetries) {
+          this.emitPaymentEvent({
+            eventType: "RETRY_SCHEDULED",
+            amount: request.amount,
+            currency: request.currency,
+            attempt,
+            metadata: {
+              orderId,
+              nextAttempt: attempt + 1,
+              delayMs:
+                this.config.retryDelayMs *
+                Math.pow(this.config.retryBackoffMultiplier, attempt),
+            },
+            outcome: "SUCCESS",
+          });
           await this.delay(attempt);
         }
       }
